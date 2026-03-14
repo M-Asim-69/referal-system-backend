@@ -1,5 +1,15 @@
-import { Module } from '@nestjs/common';
+import { Controller, Get, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { Public } from './common/decorators/public.decorator';
+
+@Controller()
+class AppController {
+  @Get()
+  @Public()
+  root() {
+    return { message: 'Hello World' };
+  }
+}
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
@@ -22,6 +32,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AdminModule,
     FilesModule,
   ],
+  controllers: [AppController],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
