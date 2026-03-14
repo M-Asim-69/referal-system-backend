@@ -92,6 +92,12 @@ When a user's initial deposit is approved, commissions are distributed automatic
       operationsSorter: 'alpha',
     },
     customSiteTitle: 'Network Marketing API Docs',
+    customCssUrl:
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.min.css',
+    customJs: [
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-standalone-preset.js',
+    ],
   });
 
   const port = parseInt(process.env.PORT || '3000', 10);
