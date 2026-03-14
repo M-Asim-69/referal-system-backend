@@ -6,13 +6,18 @@ import { ConfigService } from '@nestjs/config';
   imports: [
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        url: config.get<string>('database.url'),
-        autoLoadEntities: true,
-        synchronize: false,
-        logging: config.get<string>('nodeEnv') === 'development',
-      }),
+      useFactory: (config: ConfigService) => {
+        const url = config.get<string>('database.url') || '';
+        const isRemote = !url.includes('localhost');
+        return {
+          type: 'postgres',
+          url,
+          autoLoadEntities: true,
+          synchronize: false,
+          logging: config.get<string>('nodeEnv') === 'development',
+          ssl: isRemote ? { rejectUnauthorized: false } : false,
+        };
+      },
     }),
   ],
 })
