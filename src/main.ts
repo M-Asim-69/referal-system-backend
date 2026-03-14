@@ -81,7 +81,6 @@ When a user's initial deposit is approved, commissions are distributed automatic
     )
     .setVersion('1.0')
     .addBearerAuth()
-    .addServer(process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`, 'Local')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
