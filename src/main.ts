@@ -28,6 +28,10 @@ async function bootstrap() {
     credentials: true,
   });
 
+  app.getHttpAdapter().get('/', (req, res) => {
+    res.json({ message: 'Hello World', docs: '/api/docs', api: '/api/v1' });
+  });
+
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
