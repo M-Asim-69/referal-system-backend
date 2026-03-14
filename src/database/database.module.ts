@@ -16,6 +16,11 @@ import { ConfigService } from '@nestjs/config';
           synchronize: false,
           logging: config.get<string>('nodeEnv') === 'development',
           ssl: isRemote ? { rejectUnauthorized: false } : false,
+          extra: {
+            max: 3,
+            connectionTimeoutMillis: 5000,
+            idleTimeoutMillis: 10000,
+          },
         };
       },
     }),
