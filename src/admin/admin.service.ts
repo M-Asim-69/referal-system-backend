@@ -61,8 +61,8 @@ export class AdminService {
     const [data, total] = await this.usersRepo.findAndCount({
       where,
       select: [
-        'id', 'email', 'fullName', 'role', 'status',
-        'referralCode', 'referredById', 'walletBalance',
+        'id', 'username', 'email', 'fullName', 'mobile', 'role', 'status',
+        'referralCode', 'referredById', 'walletBalance', 'totalDepositInvestment',
         'paymentAccountNumber', 'paymentAccountBank',
         'profileImageUrl', 'createdAt', 'updatedAt',
       ],
@@ -83,12 +83,12 @@ export class AdminService {
       where: { id },
       relations: ['referredBy', 'directReferrals'],
       select: {
-        id: true, email: true, fullName: true, role: true, status: true,
-        referralCode: true, referredById: true, walletBalance: true,
+        id: true, username: true, email: true, fullName: true, mobile: true, role: true, status: true,
+        referralCode: true, referredById: true, walletBalance: true, totalDepositInvestment: true,
         paymentAccountNumber: true, paymentAccountBank: true,
         profileImageUrl: true, createdAt: true, updatedAt: true,
-        referredBy: { id: true, fullName: true, email: true },
-        directReferrals: { id: true, fullName: true, email: true, status: true },
+        referredBy: { id: true, username: true, fullName: true, email: true },
+        directReferrals: { id: true, username: true, fullName: true, email: true, status: true },
       },
     });
     if (!user) throw new NotFoundException('User not found');

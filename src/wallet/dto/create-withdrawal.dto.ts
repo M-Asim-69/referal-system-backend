@@ -1,9 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsPositive } from 'class-validator';
+import { IsNumber, Min } from 'class-validator';
+import { MIN_WITHDRAWAL } from '../../common/constants/commission.constants';
 
 export class CreateWithdrawalDto {
-  @ApiProperty({ example: 1000, description: 'Amount to withdraw' })
+  @ApiProperty({ example: 3, description: `Amount in USD (min $${MIN_WITHDRAWAL})` })
   @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
+  @Min(MIN_WITHDRAWAL, { message: `Minimum withdrawal is $${MIN_WITHDRAWAL}` })
   amount: number;
 }

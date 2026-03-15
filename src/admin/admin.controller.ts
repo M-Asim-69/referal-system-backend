@@ -37,7 +37,11 @@ export class AdminController {
   }
 
   @Get('users')
-  @ApiOperation({ summary: 'List all users with optional status filter' })
+  @ApiOperation({
+    summary: 'List all users (optionally filter by status)',
+    description:
+      'Use status=PENDING to fetch new registrations awaiting approval. Once you approve a user via PATCH /admin/users/:id/approve, they can login. All amounts are in USD.',
+  })
   @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'ACTIVE', 'REJECTED'] })
   @ApiResponse({ status: 200, description: 'Paginated user list' })
   getUsers(@Query() pagination: PaginationDto, @Query('status') status?: UserStatus) {

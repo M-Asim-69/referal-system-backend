@@ -70,8 +70,11 @@ Obtain a token via \`POST /api/v1/auth/login\`.
 3. Header: \`x-admin-register-secret: <same as env>\`
 4. Creates **ADMIN** + **ACTIVE** (no deposit)
 
+## Currency
+All amounts (wallet balance, deposits, withdrawals, commissions) are in **USD** (dollars).
+
 ## Commission Structure (5 Levels)
-When a user's initial deposit is approved, commissions are distributed automatically:
+When a user's initial deposit is approved, commissions are distributed automatically (in USD):
 - **Level 1** (direct referrer): **10%**
 - **Level 2**: **5%**
 - **Level 3**: **3%**

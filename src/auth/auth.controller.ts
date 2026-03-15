@@ -1,28 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  HttpCode,
-  HttpStatus,
-  Post,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
-import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiConsumes,
-  ApiHeader,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterAdminDto } from './dto/register-admin.dto';
-import { RegisterMultipartSwaggerDto } from './dto/register-multipart.swagger.dto';
+import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -36,36 +16,16 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(
-    FileInterceptor('screenshot', { storage: memoryStorage() }),
-  )
-  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Register user (multipart + screenshot)',
-    description: `
-**Multipart form only** — not JSON.
-
-- **screenshot** (file, required): payment proof image → uploaded to **Cloudinary**; URL stored in \`deposits.paymentProofUrl\` for admin.
-- **No** \`initialDepositAmount\`, \`paymentAccountNumber\`, or \`paymentAccountBank\` — replaced by the screenshot.
-- Account is created as **PENDING**; admin approves via \`/admin/users/:id/approve\`.
-    `.trim(),
+    summary: 'Register user (JSON)',
+    description: 'Username (lowercase+numbers), email, password, fullName. Optional: mobile, referralCode. No confirm password. User is ACTIVE; deposit min $5 with proof after login.',
   })
-  @ApiBody({
-    description:
-      'Form fields + file. Field name for file must be exactly **screenshot**.',
-    type: RegisterMultipartSwaggerDto,
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'User created; pending admin approval. Screenshot URL stored on INITIAL deposit.',
-  })
-  @ApiResponse({ status: 400, description: 'Missing screenshot or validation error' })
-  @ApiResponse({ status: 409, description: 'Email already registered' })
-  register(
-    @UploadedFile() screenshot: Express.Multer.File,
-    @Body() body: Record<string, string>,
-  ) {
-    return this.authService.registerWithScreenshot(screenshot, body);
+  @ApiBody({ type: RegisterUserDto })
+  @ApiResponse({ status: 201, description: 'User created; can login and deposit' })
+  @ApiResponse({ status: 400, description: 'Validation error or invalid referral code' })
+  @ApiResponse({ status: 409, description: 'Email or username already registered' })
+  register(@Body() dto: RegisterUserDto) {
+    return this.authService.registerUser(dto);
   }
 
   @Public()

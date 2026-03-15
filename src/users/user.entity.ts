@@ -20,6 +20,9 @@ export class User {
   id: string;
 
   @Column({ unique: true })
+  username: string;
+
+  @Column({ unique: true })
   email: string;
 
   @Exclude()
@@ -29,11 +32,20 @@ export class User {
   @Column()
   fullName: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  mobile: string | null;
+
   @Column({ type: 'varchar', length: 10, default: 'USER' })
   role: UserRole;
 
-  @Column({ type: 'varchar', length: 10, default: 'PENDING' })
+  @Column({ type: 'varchar', length: 10, default: 'ACTIVE' })
   status: UserStatus;
+
+  @Column({ type: 'numeric', precision: 18, scale: 2, default: '0' })
+  totalDepositInvestment: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastRoiAt: Date | null;
 
   @Column({ unique: true })
   referralCode: string;

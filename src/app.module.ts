@@ -10,6 +10,7 @@ class AppController {
     return { message: 'Hello World' };
   }
 }
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
@@ -24,6 +25,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule,
     DatabaseModule,
     AuthModule,

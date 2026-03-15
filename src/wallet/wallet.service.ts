@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
@@ -12,7 +13,14 @@ import { WalletTransaction } from './wallet-transaction.entity';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
-import { COMMISSION_LEVELS } from '../common/constants/commission.constants';
+import {
+  APP_CURRENCY,
+  COMMISSION_LEVELS,
+  MIN_DEPOSIT,
+  MIN_WITHDRAWAL,
+  ROI_DAILY_RATE,
+  SELF_DEPOSIT_BONUS_RATE,
+} from '../common/constants/commission.constants';
 
 @Injectable()
 export class WalletService {
@@ -35,7 +43,7 @@ export class WalletService {
       message: 'Wallet balance fetched',
       data: {
         balance: parseFloat(user.walletBalance),
-        currency: 'PKR',
+        currency: APP_CURRENCY,
       },
     };
   }
@@ -62,6 +70,12 @@ export class WalletService {
     if (user.status !== 'ACTIVE') {
       throw new BadRequestException('Your account must be active to make deposits');
     }
+    if (dto.amount < MIN_DEPOSIT) {
+      throw new BadRequestException(`Minimum deposit is $${MIN_DEPOSIT}`);
+    }
+    if (!dto.paymentProofUrl?.trim()) {
+      throw new BadRequestException('Payment proof URL is required');
+    }
 
     const deposit = await this.depositsRepo.save(
       this.depositsRepo.create({
@@ -69,11 +83,14 @@ export class WalletService {
         amount: dto.amount.toString(),
         kind: 'NORMAL',
         status: 'PENDING',
-        paymentProofUrl: dto.paymentProofUrl ?? null,
+        paymentProofUrl: dto.paymentProofUrl,
       }),
     );
 
-    return { message: 'Deposit request submitted successfully', data: deposit };
+    return {
+      message: 'Deposit request submitted. Please wait up to 24 hours for admin approval.',
+      data: deposit,
+    };
   }
 
   async getDeposits(userId: string, pagination: PaginationDto) {
@@ -99,6 +116,9 @@ export class WalletService {
       throw new BadRequestException('Your account must be active to make withdrawals');
     }
 
+    if (dto.amount < MIN_WITHDRAWAL) {
+      throw new BadRequestException(`Minimum withdrawal is $${MIN_WITHDRAWAL}`);
+    }
     const balance = parseFloat(user.walletBalance);
     if (dto.amount > balance) {
       throw new BadRequestException(
@@ -149,18 +169,34 @@ export class WalletService {
       throw new BadRequestException(`Deposit is already ${deposit.status.toLowerCase()}`);
     }
 
+    const amount = parseFloat(deposit.amount);
+    const selfBonus = parseFloat((amount * SELF_DEPOSIT_BONUS_RATE).toFixed(2));
+
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Deposit, depositId, { status: 'APPROVED' });
-      await manager.increment(User, { id: deposit.userId }, 'walletBalance', parseFloat(deposit.amount));
+      await manager.increment(User, { id: deposit.userId }, 'walletBalance', amount);
+      await manager.increment(User, { id: deposit.userId }, 'walletBalance', selfBonus);
+      await manager.increment(User, { id: deposit.userId }, 'totalDepositInvestment', amount);
       await manager.save(WalletTransaction, {
         userId: deposit.userId,
         type: 'DEPOSIT',
         status: 'APPROVED',
         amount: deposit.amount,
         referenceId: depositId,
-        note: `Deposit approved`,
+        note: 'Deposit approved',
+      });
+      await manager.save(WalletTransaction, {
+        userId: deposit.userId,
+        type: 'COMMISSION',
+        status: 'APPROVED',
+        amount: selfBonus.toString(),
+        referenceId: depositId,
+        level: 0,
+        note: 'Self deposit bonus (20%)',
       });
     });
+
+    await this.distributeCommissions(deposit.userId, amount);
   }
 
   async rejectDeposit(depositId: string): Promise<void> {
@@ -212,8 +248,7 @@ export class WalletService {
   }
 
   /**
-   * Distributes commissions up to 5 referral levels when an initial deposit is approved.
-   * Each level in the chain receives a percentage of the deposit amount.
+   * Level income 10,5,3,2,1%. Only referrers who have at least one approved deposit receive commission.
    */
   async distributeCommissions(userId: string, depositAmount: number): Promise<void> {
     let currentUserId = userId;
@@ -227,12 +262,19 @@ export class WalletService {
       if (!currentUser?.referredBy) break;
 
       const referrer = currentUser.referredBy;
-      if (referrer.status !== 'ACTIVE') {
+      const referrerHasDeposit = await this.depositsRepo.findOne({
+        where: { userId: referrer.id, status: 'APPROVED' },
+      });
+      if (!referrerHasDeposit) {
         currentUserId = referrer.id;
         continue;
       }
 
       const commission = parseFloat((depositAmount * rate).toFixed(2));
+      if (commission <= 0) {
+        currentUserId = referrer.id;
+        continue;
+      }
 
       await this.dataSource.transaction(async (manager) => {
         await manager.increment(User, { id: referrer.id }, 'walletBalance', commission);
@@ -243,11 +285,47 @@ export class WalletService {
           amount: commission.toString(),
           referenceId: userId,
           level,
-          note: `${label} commission from user registration deposit`,
+          note: `${label} from referral deposit`,
         });
       });
 
       currentUserId = referrer.id;
+    }
+  }
+
+  /** Daily 2% ROI on totalDepositInvestment. Runs at 00:00 UTC. */
+  @Cron('0 0 * * *')
+  async runDailyRoi(): Promise<void> {
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+
+    const users = await this.usersRepo.find({
+      where: {},
+      select: ['id', 'totalDepositInvestment', 'lastRoiAt', 'walletBalance'],
+    });
+
+    for (const u of users) {
+      const investment = parseFloat(u.totalDepositInvestment);
+      if (investment <= 0) continue;
+      const lastRoi = u.lastRoiAt ? new Date(u.lastRoiAt) : null;
+      if (lastRoi && lastRoi >= startOfToday) continue;
+
+      const roiAmount = parseFloat((investment * ROI_DAILY_RATE).toFixed(2));
+      if (roiAmount <= 0) continue;
+
+      await this.dataSource.transaction(async (manager) => {
+        await manager.increment(User, { id: u.id }, 'walletBalance', roiAmount);
+        await manager.update(User, { id: u.id }, { lastRoiAt: new Date() });
+        await manager.save(WalletTransaction, {
+          userId: u.id,
+          type: 'COMMISSION',
+          status: 'APPROVED',
+          amount: roiAmount.toString(),
+          referenceId: null,
+          level: null,
+          note: 'Daily ROI (2%)',
+        });
+      });
     }
   }
 }

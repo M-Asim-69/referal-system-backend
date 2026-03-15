@@ -11,14 +11,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
-import { validate } from 'class-validator';
-import { plainToInstance } from 'class-transformer';
 import { User } from '../users/user.entity';
 import { Deposit } from '../wallet/deposit.entity';
 import { RegisterAdminDto } from './dto/register-admin.dto';
-import { RegisterUserMultipartDto } from './dto/register-user-multipart.dto';
+import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginDto } from './dto/login.dto';
-import { FilesService } from '../files/files.service';
 
 @Injectable()
 export class AuthService {
@@ -28,7 +25,6 @@ export class AuthService {
     @InjectRepository(Deposit)
     private readonly depositsRepo: Repository<Deposit>,
     private readonly jwtService: JwtService,
-    private readonly filesService: FilesService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -48,6 +44,7 @@ export class AuthService {
     const referralCode = this.generateReferralCode();
 
     const user = this.usersRepo.create({
+      username: dto.email,
       email: dto.email,
       passwordHash,
       fullName: dto.fullName?.trim() || 'Administrator',
@@ -66,78 +63,37 @@ export class AuthService {
     };
   }
 
-  /**
-   * User register: multipart screenshot → Cloudinary → deposit.paymentProofUrl.
-   * No bank name / account / amount in body; request stays PENDING for admin.
-   */
-  async registerWithScreenshot(
-    file: Express.Multer.File | undefined,
-    body: Record<string, string>,
-  ) {
-    if (!file?.buffer?.length) {
-      throw new BadRequestException('Screenshot file is required (field name: screenshot)');
-    }
-
-    const dto = plainToInstance(RegisterUserMultipartDto, {
-      email: body.email,
-      password: body.password,
-      fullName: body.fullName,
-      referralCode: body.referralCode || undefined,
-    });
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      const msg = errors.map((e) => Object.values(e.constraints || {}).join(', ')).join('; ');
-      throw new BadRequestException(msg || 'Validation failed');
-    }
-
-    const existing = await this.usersRepo.findOne({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('Email is already registered');
+  /** User register: JSON only. User is ACTIVE; can login and deposit (min $5 + proof). */
+  async registerUser(dto: RegisterUserDto) {
+    const existingEmail = await this.usersRepo.findOne({ where: { email: dto.email } });
+    if (existingEmail) throw new ConflictException('Email is already registered');
+    const existingUsername = await this.usersRepo.findOne({ where: { username: dto.username } });
+    if (existingUsername) throw new ConflictException('Username is already taken');
 
     let referrer: User | null = null;
     if (dto.referralCode) {
       referrer = await this.usersRepo.findOne({ where: { referralCode: dto.referralCode } });
       if (!referrer) throw new BadRequestException('Invalid referral code');
-      if (referrer.status !== 'ACTIVE') {
-        throw new BadRequestException('Referral code belongs to an inactive account');
-      }
     }
-
-    const upload = await this.filesService.uploadImage(file, 'registrations');
-    const paymentProofUrl = upload.data.url;
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const referralCode = this.generateReferralCode();
 
     const user = this.usersRepo.create({
+      username: dto.username,
       email: dto.email,
       passwordHash,
       fullName: dto.fullName,
+      mobile: dto.mobile ?? null,
       referralCode,
       referredById: referrer?.id ?? null,
-      paymentAccountNumber: null,
-      paymentAccountBank: null,
-      profileImageUrl: paymentProofUrl, // same Cloudinary URL — DB mein profileImageUrl bhi fill
-      status: 'PENDING',
+      status: 'ACTIVE',
       role: 'USER',
     });
 
     const savedUser = await this.usersRepo.save(user);
-
-    // INITIAL deposit: amount 0 until admin sets amount on approve or separate flow;
-    // proof URL is the screenshot for admin review.
-    await this.depositsRepo.save(
-      this.depositsRepo.create({
-        userId: savedUser.id,
-        amount: '0',
-        kind: 'INITIAL',
-        status: 'PENDING',
-        paymentProofUrl,
-      }),
-    );
-
     return {
-      message:
-        'Registration successful. Screenshot received; your account is pending admin approval.',
+      message: 'Registration successful. You can login and make a deposit (min $5 with payment proof).',
       data: this.sanitizeUser(savedUser),
     };
   }
