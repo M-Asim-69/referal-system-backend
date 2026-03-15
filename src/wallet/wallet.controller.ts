@@ -27,8 +27,8 @@ export class WalletController {
   constructor(private readonly walletService: WalletService) {}
 
   @Get('balance')
-  @ApiOperation({ summary: 'Get my wallet balance' })
-  @ApiResponse({ status: 200, description: 'Current wallet balance' })
+  @ApiOperation({ summary: 'Get my wallet balance', description: 'Returns balance in USD.' })
+  @ApiResponse({ status: 200, description: 'balance, currency (USD)' })
   getBalance(@CurrentUser() user: User) {
     return this.walletService.getBalance(user.id);
   }
@@ -42,9 +42,12 @@ export class WalletController {
 
   @Post('deposits')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Submit a deposit request' })
-  @ApiResponse({ status: 201, description: 'Deposit request submitted, pending admin approval' })
-  @ApiResponse({ status: 400, description: 'Account not active' })
+  @ApiOperation({
+    summary: 'Submit deposit (min $5 + proof)',
+    description: 'amount ≥ 5 (USD), paymentProofUrl required (screenshot). Manual approval; wait up to 24h. On approve: credit + 20% self bonus + level commissions.',
+  })
+  @ApiResponse({ status: 201, description: 'Deposit submitted; wait up to 24h for approval' })
+  @ApiResponse({ status: 400, description: 'Min $5, proof required, or account not active' })
   createDeposit(@CurrentUser() user: User, @Body() dto: CreateDepositDto) {
     return this.walletService.createDeposit(user.id, dto);
   }
@@ -58,9 +61,12 @@ export class WalletController {
 
   @Post('withdrawals')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Submit a withdrawal request' })
-  @ApiResponse({ status: 201, description: 'Withdrawal request submitted, pending admin approval' })
-  @ApiResponse({ status: 400, description: 'Insufficient balance or pending withdrawal exists' })
+  @ApiOperation({
+    summary: 'Submit withdrawal (min $3)',
+    description: 'amount ≥ 3 (USD). Manual approval by admin.',
+  })
+  @ApiResponse({ status: 201, description: 'Withdrawal submitted; pending admin approval' })
+  @ApiResponse({ status: 400, description: 'Min $3, insufficient balance, or existing pending withdrawal' })
   createWithdrawal(@CurrentUser() user: User, @Body() dto: CreateWithdrawalDto) {
     return this.walletService.createWithdrawal(user.id, dto);
   }

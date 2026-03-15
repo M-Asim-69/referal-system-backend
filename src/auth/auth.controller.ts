@@ -61,7 +61,7 @@ No bank/deposit fields.
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login', description: 'Returns JWT. PENDING users can login but have limited access until approved.' })
+  @ApiOperation({ summary: 'Login', description: 'Email + password. Returns JWT for protected routes. REJECTED accounts cannot login.' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'accessToken + user payload' })
   @ApiResponse({ status: 401, description: 'Invalid credentials or rejected account' })
@@ -71,8 +71,8 @@ No bank/deposit fields.
 
   @Get('me')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Current user profile' })
-  @ApiResponse({ status: 200, description: 'Sanitized user (no passwordHash)' })
+  @ApiOperation({ summary: 'Current user profile', description: 'Returns user with referralCode, username, email, fullName, mobile, walletBalance (USD).' })
+  @ApiResponse({ status: 200, description: 'User (no passwordHash)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getMe(@CurrentUser() user: User) {
     return this.authService.getMe(user.id);

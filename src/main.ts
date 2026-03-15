@@ -49,37 +49,34 @@ async function bootstrap() {
     .setDescription(
       `
 ## Overview
-Production-grade REST API for a Network Marketing Platform.
+REST API for referral + investment platform. All amounts in **USD**.
 
-## Authentication
-All protected routes require a **Bearer JWT token** in the Authorization header.  
-Obtain a token via \`POST /api/v1/auth/login\`.
+## Auth
+- **Register:** \`POST /api/v1/auth/register\` — JSON: \`username\`, \`email\`, \`password\`, \`fullName\`; optional \`mobile\`, \`referralCode\`. User is **ACTIVE**; can login immediately.
+- **Login:** \`POST /api/v1/auth/login\` — returns JWT. Use header \`Authorization: Bearer <token>\` on protected routes.
+- **Admin register:** \`POST /api/v1/auth/register-admin\` — header \`x-admin-register-secret\` required.
 
-## Registration Flow
+## Limits (USD)
+- **Min deposit:** $5. **Min withdrawal:** $3.
+- Deposit/Withdrawal: **manual** (admin approves).
 
-### User (multipart)
-1. **Register:** \`POST /api/v1/auth/register\` as **multipart/form-data**
-   - Fields: \`email\`, \`password\`, \`fullName\`, optional \`referralCode\`
-   - **File field name:** \`screenshot\` (required) — image uploaded to **Cloudinary**; URL stored on INITIAL deposit for admin
-   - No bank name / account number / amount in body
-2. Account stays **PENDING** until admin approves (\`/admin/users/:id/approve\`)
+## Deposit
+- \`POST /api/v1/wallet/deposits\`: \`amount\` (≥5), \`paymentProofUrl\` (screenshot URL, required).
+- Response: wait up to 24 hours for admin approval. On approve: amount credited + **20% self bonus** + level commissions to referrers.
 
-### Admin (JSON + secret)
-1. Set \`ADMIN_REGISTER_SECRET\` in \`.env\`
-2. **Register:** \`POST /api/v1/auth/register-admin\` with JSON \`{ email, password, fullName? }\`
-3. Header: \`x-admin-register-secret: <same as env>\`
-4. Creates **ADMIN** + **ACTIVE** (no deposit)
+## Level income (when referred user’s deposit is approved)
+Only referrers who have **at least one approved deposit** receive commission:
+- **Level 1:** 10% · Level 2: 5% · Level 3: 3% · Level 4: 2% · Level 5: 1% (total 21%).
 
-## Currency
-All amounts (wallet balance, deposits, withdrawals, commissions) are in **USD** (dollars).
+## ROI
+- **2% daily** on \`totalDepositInvestment\` (sum of approved deposits). Credited automatically once per day.
 
-## Commission Structure (5 Levels)
-When a user's initial deposit is approved, commissions are distributed automatically (in USD):
-- **Level 1** (direct referrer): **10%**
-- **Level 2**: **5%**
-- **Level 3**: **3%**
-- **Level 4**: **2%**
-- **Level 5**: **1%**
+## User stats (after login)
+- \`GET /api/v1/wallet/balance\` — current balance (USD).
+- \`GET /api/v1/wallet/transactions\` — history (deposits, withdrawals, commissions, ROI).
+- \`GET /api/v1/wallet/deposits\`, \`GET /api/v1/wallet/withdrawals\` — lists.
+- \`GET /api/v1/users/referrals\` — referral tree.
+- Profile includes \`referralCode\` for sharing.
       `,
     )
     .setVersion('1.0')
