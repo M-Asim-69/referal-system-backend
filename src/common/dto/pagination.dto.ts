@@ -17,4 +17,12 @@ export class PaginationDto {
   @Min(1)
   @Max(100)
   limit: number = 10;
+
+  /**
+   * Optional status filter used by some list endpoints (e.g. admin deposits/withdrawals).
+   * Kept generic here so ValidationPipe whitelist doesn't reject ?status=... on PaginationDto.
+   */
+  @ApiPropertyOptional()
+  @IsOptional()
+  status?: string;
 }

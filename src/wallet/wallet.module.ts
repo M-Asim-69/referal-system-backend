@@ -6,11 +6,13 @@ import { Withdrawal } from './withdrawal.entity';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
 import { UsersModule } from '../users/users.module';
+import { FilesModule } from '../files/files.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([WalletTransaction, Deposit, Withdrawal]),
     UsersModule,
+    FilesModule,
   ],
   controllers: [WalletController],
   providers: [WalletService],

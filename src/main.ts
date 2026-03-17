@@ -61,8 +61,8 @@ REST API for referral + investment platform. All amounts in **USD**.
 - Deposit/Withdrawal: **manual** (admin approves).
 
 ## Deposit
-- \`POST /api/v1/wallet/deposits\`: \`amount\` (≥5), \`paymentProofUrl\` (screenshot URL, required).
-- Response: wait up to 24 hours for admin approval. On approve: amount credited + **20% self bonus** + level commissions to referrers.
+- \`POST /api/v1/wallet/deposits\`: \`amount\` (≥5) + screenshot (multipart). Screenshot is stored in Cloudinary.
+- Response: wait up to 24 hours for admin approval. On approve: deposit amount is credited and level commissions are paid to eligible referrers.
 
 ## Level income (when referred user’s deposit is approved)
 Only referrers who have **at least one approved deposit** receive commission:

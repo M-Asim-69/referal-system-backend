@@ -53,10 +53,9 @@ export class AdminService {
     };
   }
 
-  async getUsers(pagination: PaginationDto, status?: UserStatus) {
+  async getUsers(pagination: PaginationDto) {
     const { page, limit } = pagination;
     const where: Partial<{ role: 'USER'; status: UserStatus }> = { role: 'USER' };
-    if (status) where.status = status;
 
     const [data, total] = await this.usersRepo.findAndCount({
       where,

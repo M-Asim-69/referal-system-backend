@@ -6,13 +6,19 @@ import {
   HttpStatus,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { WalletService } from './wallet.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
@@ -42,14 +48,31 @@ export class WalletController {
 
   @Post('deposits')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('screenshot', { storage: memoryStorage() }))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Submit deposit (min $5 + proof)',
-    description: 'amount ≥ 5 (USD), paymentProofUrl required (screenshot). Manual approval; wait up to 24h. On approve: credit + 20% self bonus + level commissions.',
+    description:
+      'amount ≥ 5 (USD) + screenshot file (field name: screenshot). Manual approval; wait up to 24h. On approve: amount is credited and referral level commissions are applied.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', format: 'float', example: 5 },
+        screenshot: { type: 'string', format: 'binary' },
+      },
+      required: ['amount', 'screenshot'],
+    },
   })
   @ApiResponse({ status: 201, description: 'Deposit submitted; wait up to 24h for approval' })
   @ApiResponse({ status: 400, description: 'Min $5, proof required, or account not active' })
-  createDeposit(@CurrentUser() user: User, @Body() dto: CreateDepositDto) {
-    return this.walletService.createDeposit(user.id, dto);
+  createDeposit(
+    @CurrentUser() user: User,
+    @Body() dto: CreateDepositDto,
+    @UploadedFile() screenshot: Express.Multer.File,
+  ) {
+    return this.walletService.createDeposit(user.id, dto, screenshot);
   }
 
   @Get('deposits')

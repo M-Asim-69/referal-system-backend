@@ -1,7 +1,6 @@
 export const APP_CURRENCY = 'USD';
 export const MIN_DEPOSIT = 5;
 export const MIN_WITHDRAWAL = 3;
-export const SELF_DEPOSIT_BONUS_RATE = 0.2; // 20%
 export const ROI_DAILY_RATE = 0.02; // 2% daily on investment
 
 export interface CommissionLevel {

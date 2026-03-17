@@ -38,13 +38,13 @@ export class AdminController {
 
   @Get('users')
   @ApiOperation({
-    summary: 'List users (filter by status)',
-    description: 'Optional query status=PENDING | ACTIVE | REJECTED. Returns username, email, mobile, referralCode, walletBalance, totalDepositInvestment (USD).',
+    summary: 'List users',
+    description:
+      'Returns all users (role=USER) with username, email, mobile, referralCode, walletBalance, totalDepositInvestment (USD). No status filter is applied here.',
   })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'ACTIVE', 'REJECTED'] })
   @ApiResponse({ status: 200, description: 'Paginated user list' })
-  getUsers(@Query() pagination: PaginationDto, @Query('status') status?: UserStatus) {
-    return this.adminService.getUsers(pagination, status);
+  getUsers(@Query() pagination: PaginationDto) {
+    return this.adminService.getUsers(pagination);
   }
 
   @Get('users/:id')
@@ -103,7 +103,7 @@ export class AdminController {
 
   @Patch('deposits/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve deposit', description: 'Credits amount + 20% self bonus; updates totalDepositInvestment; distributes level commissions (10,5,3,2,1%) to referrers with approved deposit.' })
+  @ApiOperation({ summary: 'Approve deposit', description: 'Credits deposit amount, updates totalDepositInvestment, and distributes level commissions (10,5,3,2,1%) to referrers with approved deposit.' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Deposit approved, wallet credited' })
   @ApiResponse({ status: 400, description: 'Deposit not in pending state' })

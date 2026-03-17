@@ -13,13 +13,13 @@ import { WalletTransaction } from './wallet-transaction.entity';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { FilesService } from '../files/files.service';
 import {
   APP_CURRENCY,
   COMMISSION_LEVELS,
   MIN_DEPOSIT,
   MIN_WITHDRAWAL,
   ROI_DAILY_RATE,
-  SELF_DEPOSIT_BONUS_RATE,
 } from '../common/constants/commission.constants';
 
 @Injectable()
@@ -34,6 +34,7 @@ export class WalletService {
     @InjectRepository(WalletTransaction)
     private readonly txRepo: Repository<WalletTransaction>,
     private readonly dataSource: DataSource,
+    private readonly filesService: FilesService,
   ) {}
 
   async getBalance(userId: string) {
@@ -64,18 +65,36 @@ export class WalletService {
     };
   }
 
-  async createDeposit(userId: string, dto: CreateDepositDto) {
+  async createDeposit(
+    userId: string,
+    dto: CreateDepositDto,
+    file: Express.Multer.File | undefined,
+  ) {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.status !== 'ACTIVE') {
       throw new BadRequestException('Your account must be active to make deposits');
     }
+
+    const pendingDeposit = await this.depositsRepo.findOne({
+      where: { userId, status: 'PENDING', kind: 'NORMAL' },
+      order: { createdAt: 'DESC' },
+    });
+    if (pendingDeposit) {
+      throw new BadRequestException(
+        'You already have a pending deposit request. Please wait for admin approval (or rejection) before submitting a new one.',
+      );
+    }
+
     if (dto.amount < MIN_DEPOSIT) {
       throw new BadRequestException(`Minimum deposit is $${MIN_DEPOSIT}`);
     }
-    if (!dto.paymentProofUrl?.trim()) {
-      throw new BadRequestException('Payment proof URL is required');
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Payment proof screenshot is required (field name: screenshot)');
     }
+
+    const upload = await this.filesService.uploadImage(file, 'deposits');
+    const paymentProofUrl = upload.data.url;
 
     const deposit = await this.depositsRepo.save(
       this.depositsRepo.create({
@@ -83,7 +102,7 @@ export class WalletService {
         amount: dto.amount.toString(),
         kind: 'NORMAL',
         status: 'PENDING',
-        paymentProofUrl: dto.paymentProofUrl,
+        paymentProofUrl,
       }),
     );
 
@@ -170,12 +189,10 @@ export class WalletService {
     }
 
     const amount = parseFloat(deposit.amount);
-    const selfBonus = parseFloat((amount * SELF_DEPOSIT_BONUS_RATE).toFixed(2));
 
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Deposit, depositId, { status: 'APPROVED' });
       await manager.increment(User, { id: deposit.userId }, 'walletBalance', amount);
-      await manager.increment(User, { id: deposit.userId }, 'walletBalance', selfBonus);
       await manager.increment(User, { id: deposit.userId }, 'totalDepositInvestment', amount);
       await manager.save(WalletTransaction, {
         userId: deposit.userId,
@@ -184,15 +201,6 @@ export class WalletService {
         amount: deposit.amount,
         referenceId: depositId,
         note: 'Deposit approved',
-      });
-      await manager.save(WalletTransaction, {
-        userId: deposit.userId,
-        type: 'COMMISSION',
-        status: 'APPROVED',
-        amount: selfBonus.toString(),
-        referenceId: depositId,
-        level: 0,
-        note: 'Self deposit bonus (20%)',
       });
     });
 
