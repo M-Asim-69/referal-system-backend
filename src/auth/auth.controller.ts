@@ -1,5 +1,25 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiHeader,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AuthService } from './auth.service';
 import { RegisterAdminDto } from './dto/register-admin.dto';
 import { RegisterUserDto } from './dto/register-user.dto';
@@ -16,21 +36,43 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('profilePhoto', { storage: memoryStorage() }))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Register user (JSON)',
-    description: 'Username (lowercase+numbers), email, password, fullName. Optional: mobile, referralCode. No confirm password. User is ACTIVE; deposit min $5 with proof after login.',
+    summary: 'Register user (multipart)',
+    description:
+      'Fields: username, email, password, fullName; optional mobile, referralCode, profilePhoto (image). User is ACTIVE; deposit min $5 with proof after login.',
   })
-  @ApiBody({ type: RegisterUserDto })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['username', 'email', 'password', 'fullName'],
+      properties: {
+        username: { type: 'string', example: 'johndoe' },
+        email: { type: 'string', example: 'user@example.com' },
+        password: { type: 'string', example: 'Secret1a' },
+        fullName: { type: 'string', example: 'John Doe' },
+        mobile: { type: 'string', example: '03001234567' },
+        referralCode: { type: 'string' },
+        profilePhoto: { type: 'string', format: 'binary', description: 'Optional profile image' },
+      },
+    },
+  })
   @ApiResponse({ status: 201, description: 'User created; can login and deposit' })
   @ApiResponse({ status: 400, description: 'Validation error or invalid referral code' })
   @ApiResponse({ status: 409, description: 'Email or username already registered' })
-  register(@Body() dto: RegisterUserDto) {
-    return this.authService.registerUser(dto);
+  register(
+    @Body() dto: RegisterUserDto,
+    @UploadedFile() profilePhoto: Express.Multer.File | undefined,
+  ) {
+    return this.authService.registerUser(dto, profilePhoto);
   }
 
   @Public()
   @Post('register-admin')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('profilePhoto', { storage: memoryStorage() }))
+  @ApiConsumes('multipart/form-data')
   @ApiHeader({
     name: 'x-admin-register-secret',
     required: true,
@@ -39,23 +81,35 @@ export class AuthController {
     schema: { type: 'string', example: 'change-this-secret' },
   })
   @ApiOperation({
-    summary: 'Register admin (email + password only)',
+    summary: 'Register admin (multipart)',
     description: `
 Creates an **ADMIN** user with status **ACTIVE**.  
-No bank/deposit fields.
+Fields: email, password; optional fullName, profilePhoto.
 
 **Security:** Protected by header \`x-admin-register-secret\`. Set a strong \`ADMIN_REGISTER_SECRET\` in production.
     `.trim(),
   })
-  @ApiBody({ type: RegisterAdminDto })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email', 'password'],
+      properties: {
+        email: { type: 'string' },
+        password: { type: 'string' },
+        fullName: { type: 'string' },
+        profilePhoto: { type: 'string', format: 'binary', description: 'Optional profile image' },
+      },
+    },
+  })
   @ApiResponse({ status: 201, description: 'Admin user created' })
   @ApiResponse({ status: 403, description: 'Invalid or missing admin registration secret' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   registerAdmin(
     @Body() dto: RegisterAdminDto,
     @Headers('x-admin-register-secret') secret: string,
+    @UploadedFile() profilePhoto: Express.Multer.File | undefined,
   ) {
-    return this.authService.registerAdmin(dto, secret);
+    return this.authService.registerAdmin(dto, secret, profilePhoto);
   }
 
   @Public()
@@ -63,7 +117,10 @@ No bank/deposit fields.
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login', description: 'Email + password. Returns JWT for protected routes. REJECTED accounts cannot login.' })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'accessToken + user payload' })
+  @ApiResponse({
+    status: 200,
+    description: 'accessToken, referralCode (top-level + inside user), and user payload',
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials or rejected account' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);

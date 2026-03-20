@@ -9,10 +9,10 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 
-export type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type StakeStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-@Entity('withdrawals')
-export class Withdrawal {
+@Entity('stakes')
+export class Stake {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -27,10 +27,7 @@ export class Withdrawal {
   amount: string;
 
   @Column({ type: 'varchar', length: 10, default: 'PENDING' })
-  status: WithdrawalStatus;
-
-  @Column({ type: 'varchar', length: 512, nullable: true })
-  paymentProofUrl: string | null;
+  status: StakeStatus;
 
   @CreateDateColumn()
   createdAt: Date;

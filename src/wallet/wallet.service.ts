@@ -9,17 +9,20 @@ import { DataSource, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Deposit } from './deposit.entity';
 import { Withdrawal } from './withdrawal.entity';
+import { Stake } from './stake.entity';
 import { WalletTransaction } from './wallet-transaction.entity';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
+import { CreateStakeDto } from './dto/create-stake.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { FilesService } from '../files/files.service';
 import {
   APP_CURRENCY,
   COMMISSION_LEVELS,
   MIN_DEPOSIT,
+  MIN_STAKE,
   MIN_WITHDRAWAL,
-  ROI_DAILY_RATE,
+  STAKE_ROI_DAILY_RATE,
 } from '../common/constants/commission.constants';
 
 @Injectable()
@@ -31,6 +34,8 @@ export class WalletService {
     private readonly depositsRepo: Repository<Deposit>,
     @InjectRepository(Withdrawal)
     private readonly withdrawalsRepo: Repository<Withdrawal>,
+    @InjectRepository(Stake)
+    private readonly stakesRepo: Repository<Stake>,
     @InjectRepository(WalletTransaction)
     private readonly txRepo: Repository<WalletTransaction>,
     private readonly dataSource: DataSource,
@@ -44,6 +49,7 @@ export class WalletService {
       message: 'Wallet balance fetched',
       data: {
         balance: parseFloat(user.walletBalance),
+        stakedBalance: parseFloat(user.stakedBalance ?? '0'),
         currency: APP_CURRENCY,
       },
     };
@@ -128,7 +134,11 @@ export class WalletService {
     };
   }
 
-  async createWithdrawal(userId: string, dto: CreateWithdrawalDto) {
+  async createWithdrawal(
+    userId: string,
+    dto: CreateWithdrawalDto,
+    file: Express.Multer.File | undefined,
+  ) {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.status !== 'ACTIVE') {
@@ -150,19 +160,141 @@ export class WalletService {
     });
     if (pendingWithdrawal) {
       throw new BadRequestException(
-        'You already have a pending withdrawal request. Please wait for it to be processed.',
+        'You already have a pending withdrawal request. Please wait for admin approval (or rejection) before submitting a new one.',
       );
     }
+
+    if (!file?.buffer?.length) {
+      throw new BadRequestException(
+        'Withdrawal proof screenshot is required (field name: screenshot), same as deposit flow.',
+      );
+    }
+
+    const upload = await this.filesService.uploadImage(file, 'withdrawals');
+    const paymentProofUrl = upload.data.url;
 
     const withdrawal = await this.withdrawalsRepo.save(
       this.withdrawalsRepo.create({
         userId,
         amount: dto.amount.toString(),
         status: 'PENDING',
+        paymentProofUrl,
       }),
     );
 
-    return { message: 'Withdrawal request submitted successfully', data: withdrawal };
+    return {
+      message:
+        'Withdrawal request submitted. Please wait for admin approval. Only one pending request at a time.',
+      data: withdrawal,
+    };
+  }
+
+  async createStakeRequest(userId: string, dto: CreateStakeDto) {
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.status !== 'ACTIVE') {
+      throw new BadRequestException('Your account must be active to stake');
+    }
+
+    const totalDeposited = parseFloat(user.totalDepositInvestment);
+    if (totalDeposited <= 0) {
+      throw new BadRequestException(
+        'You need an approved deposit before you can stake. Deposit funds first.',
+      );
+    }
+
+    if (dto.amount < MIN_STAKE) {
+      throw new BadRequestException(`Minimum stake is $${MIN_STAKE}`);
+    }
+
+    const wallet = parseFloat(user.walletBalance);
+    if (dto.amount > wallet) {
+      throw new BadRequestException(
+        `Insufficient wallet balance. Available: ${wallet}, requested: ${dto.amount}`,
+      );
+    }
+
+    const pending = await this.stakesRepo.findOne({
+      where: { userId, status: 'PENDING' },
+      order: { createdAt: 'DESC' },
+    });
+    if (pending) {
+      throw new BadRequestException(
+        'You already have a pending stake request. Wait for admin approval or rejection before submitting another.',
+      );
+    }
+
+    const stake = await this.stakesRepo.save(
+      this.stakesRepo.create({
+        userId,
+        amount: dto.amount.toString(),
+        status: 'PENDING',
+      }),
+    );
+
+    return {
+      message:
+        'Stake request submitted. Admin will review; once approved, funds move from wallet to staked balance and earn daily ROI.',
+      data: stake,
+    };
+  }
+
+  async getStakes(userId: string, pagination: PaginationDto) {
+    const { page, limit } = pagination;
+    const [data, total] = await this.stakesRepo.findAndCount({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      message: 'Stakes fetched successfully',
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async approveStake(stakeId: string): Promise<void> {
+    const stake = await this.stakesRepo.findOne({ where: { id: stakeId } });
+    if (!stake) throw new NotFoundException('Stake request not found');
+    if (stake.status !== 'PENDING') {
+      throw new BadRequestException(`Stake is already ${stake.status.toLowerCase()}`);
+    }
+
+    const user = await this.usersRepo.findOne({ where: { id: stake.userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const amount = parseFloat(stake.amount);
+    const wallet = parseFloat(user.walletBalance);
+    if (amount > wallet) {
+      throw new BadRequestException(
+        'User no longer has enough wallet balance to approve this stake',
+      );
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(Stake, stakeId, { status: 'APPROVED' });
+      await manager.decrement(User, { id: stake.userId }, 'walletBalance', amount);
+      await manager.increment(User, { id: stake.userId }, 'stakedBalance', amount);
+      await manager.save(WalletTransaction, {
+        userId: stake.userId,
+        type: 'STAKE',
+        status: 'APPROVED',
+        amount: stake.amount,
+        referenceId: stakeId,
+        note: 'Stake approved — moved from wallet to staked balance',
+      });
+    });
+  }
+
+  async rejectStake(stakeId: string): Promise<void> {
+    const stake = await this.stakesRepo.findOne({ where: { id: stakeId } });
+    if (!stake) throw new NotFoundException('Stake request not found');
+    if (stake.status !== 'PENDING') {
+      throw new BadRequestException(`Stake is already ${stake.status.toLowerCase()}`);
+    }
+    await this.stakesRepo.update(stakeId, { status: 'REJECTED' });
   }
 
   async getWithdrawals(userId: string, pagination: PaginationDto) {
@@ -301,37 +433,38 @@ export class WalletService {
     }
   }
 
-  /** Daily 2% ROI on totalDepositInvestment. Runs at 00:00 UTC. */
+  /** Daily 2% profit on stakedBalance only (not on deposits). Runs 00:00 UTC. */
   @Cron('0 0 * * *')
-  async runDailyRoi(): Promise<void> {
+  async runDailyStakeRoi(): Promise<void> {
     const startOfToday = new Date();
     startOfToday.setUTCHours(0, 0, 0, 0);
 
     const users = await this.usersRepo.find({
       where: {},
-      select: ['id', 'totalDepositInvestment', 'lastRoiAt', 'walletBalance'],
+      select: ['id', 'stakedBalance', 'lastStakeRoiAt', 'walletBalance'],
     });
 
     for (const u of users) {
-      const investment = parseFloat(u.totalDepositInvestment);
-      if (investment <= 0) continue;
-      const lastRoi = u.lastRoiAt ? new Date(u.lastRoiAt) : null;
-      if (lastRoi && lastRoi >= startOfToday) continue;
+      const staked = parseFloat(u.stakedBalance ?? '0');
+      if (staked <= 0) continue;
 
-      const roiAmount = parseFloat((investment * ROI_DAILY_RATE).toFixed(2));
+      const last = u.lastStakeRoiAt ? new Date(u.lastStakeRoiAt) : null;
+      if (last && last >= startOfToday) continue;
+
+      const roiAmount = parseFloat((staked * STAKE_ROI_DAILY_RATE).toFixed(2));
       if (roiAmount <= 0) continue;
 
       await this.dataSource.transaction(async (manager) => {
         await manager.increment(User, { id: u.id }, 'walletBalance', roiAmount);
-        await manager.update(User, { id: u.id }, { lastRoiAt: new Date() });
+        await manager.update(User, { id: u.id }, { lastStakeRoiAt: new Date() });
         await manager.save(WalletTransaction, {
           userId: u.id,
-          type: 'COMMISSION',
+          type: 'STAKE_ROI',
           status: 'APPROVED',
           amount: roiAmount.toString(),
           referenceId: null,
           level: null,
-          note: 'Daily ROI (2%)',
+          note: 'Daily stake ROI (2%)',
         });
       });
     }

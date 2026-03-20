@@ -63,6 +63,13 @@ export class User {
   @Column({ type: 'numeric', precision: 18, scale: 2, default: '0' })
   walletBalance: string;
 
+  /** Approved stakes only; earns STAKE_ROI_DAILY_RATE per day (see WalletService.runDailyStakeRoi). */
+  @Column({ type: 'numeric', precision: 18, scale: 2, default: '0' })
+  stakedBalance: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastStakeRoiAt: Date | null;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   paymentAccountNumber: string | null;
 
