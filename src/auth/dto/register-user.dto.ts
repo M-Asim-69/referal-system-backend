@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 export class RegisterUserDto {
   @ApiProperty({ example: 'johndoe', description: 'Lowercase letters and numbers only' })
@@ -15,6 +19,7 @@ export class RegisterUserDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(emptyToUndefined)
   @IsString()
   @MaxLength(20)
   mobile?: string;
@@ -35,6 +40,7 @@ export class RegisterUserDto {
 
   @ApiPropertyOptional({ description: 'Referrer referral code' })
   @IsOptional()
+  @Transform(emptyToUndefined)
   @IsString()
   @MaxLength(20)
   referralCode?: string;

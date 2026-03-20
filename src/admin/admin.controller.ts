@@ -123,7 +123,11 @@ export class AdminController {
   }
 
   @Get('withdrawals')
-  @ApiOperation({ summary: 'List withdrawals', description: 'Manual approval. Min $3. Approve via PATCH /admin/withdrawals/:id/approve.' })
+  @ApiOperation({
+    summary: 'List withdrawals',
+    description:
+      'Manual approval. User submits amount + paymentProofUrl (screenshot), same idea as deposits. Approve via PATCH /admin/withdrawals/:id/approve.',
+  })
   @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'APPROVED', 'REJECTED'] })
   @ApiResponse({ status: 200, description: 'Paginated withdrawal list' })
   getAllWithdrawals(@Query() pagination: PaginationDto, @Query('status') status?: string) {
@@ -149,5 +153,37 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Withdrawal not found' })
   rejectWithdrawal(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.rejectWithdrawal(id);
+  }
+
+  @Get('stakes')
+  @ApiOperation({
+    summary: 'List stake requests',
+    description: 'User requests to move wallet funds into staked balance. Approve moves wallet → staked; user earns daily 2% on staked total.',
+  })
+  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'APPROVED', 'REJECTED'] })
+  @ApiResponse({ status: 200, description: 'Paginated stake list' })
+  getAllStakes(@Query() pagination: PaginationDto, @Query('status') status?: string) {
+    return this.adminService.getAllStakes(pagination, status);
+  }
+
+  @Patch('stakes/:id/approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Approve stake — debit wallet, credit stakedBalance' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Stake approved' })
+  @ApiResponse({ status: 400, description: 'Not pending or insufficient user wallet' })
+  @ApiResponse({ status: 404, description: 'Stake not found' })
+  approveStake(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.approveStake(id);
+  }
+
+  @Patch('stakes/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject pending stake request' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Stake rejected' })
+  @ApiResponse({ status: 404, description: 'Stake not found' })
+  rejectStake(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.rejectStake(id);
   }
 }

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
@@ -8,6 +9,9 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 /**
  * Admin signup: email + password only.
@@ -37,6 +41,7 @@ export class RegisterAdminDto {
     description: 'Defaults to "Administrator" if omitted',
   })
   @IsOptional()
+  @Transform(emptyToUndefined)
   @IsString()
   @MaxLength(100)
   fullName?: string;

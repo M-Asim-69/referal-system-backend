@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,7 @@ import { Deposit } from '../wallet/deposit.entity';
 import { RegisterAdminDto } from './dto/register-admin.dto';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginDto } from './dto/login.dto';
+import { FilesService } from '../files/files.service';
 
 @Injectable()
 export class AuthService {
@@ -26,12 +28,17 @@ export class AuthService {
     private readonly depositsRepo: Repository<Deposit>,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly filesService: FilesService,
   ) {}
 
   /**
    * Admin register: email + password only. Guarded by ADMIN_REGISTER_SECRET.
    */
-  async registerAdmin(dto: RegisterAdminDto, secretHeader?: string) {
+  async registerAdmin(
+    dto: RegisterAdminDto,
+    secretHeader: string | undefined,
+    profilePhoto: Express.Multer.File | undefined,
+  ) {
     const expected = this.configService.get<string>('adminRegisterSecret');
     if (!expected || secretHeader !== expected) {
       throw new ForbiddenException('Invalid or missing admin registration secret');
@@ -43,6 +50,12 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const referralCode = this.generateReferralCode();
 
+    let profileImageUrl: string | null = null;
+    if (profilePhoto?.buffer?.length) {
+      const upload = await this.filesService.uploadImage(profilePhoto, 'profiles');
+      profileImageUrl = upload.data.url;
+    }
+
     const user = this.usersRepo.create({
       username: dto.email,
       email: dto.email,
@@ -52,6 +65,7 @@ export class AuthService {
       referredById: null,
       paymentAccountNumber: null,
       paymentAccountBank: null,
+      profileImageUrl,
       status: 'ACTIVE',
       role: 'ADMIN',
     });
@@ -63,8 +77,11 @@ export class AuthService {
     };
   }
 
-  /** User register: JSON only. User is ACTIVE; can login and deposit (min $5 + proof). */
-  async registerUser(dto: RegisterUserDto) {
+  /**
+   * User register: multipart/form-data (same fields as before + optional profilePhoto file).
+   * User is ACTIVE; can login and deposit (min $5 + proof).
+   */
+  async registerUser(dto: RegisterUserDto, profilePhoto: Express.Multer.File | undefined) {
     const existingEmail = await this.usersRepo.findOne({ where: { email: dto.email } });
     if (existingEmail) throw new ConflictException('Email is already registered');
     const existingUsername = await this.usersRepo.findOne({ where: { username: dto.username } });
@@ -79,6 +96,12 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const referralCode = this.generateReferralCode();
 
+    let profileImageUrl: string | null = null;
+    if (profilePhoto?.buffer?.length) {
+      const upload = await this.filesService.uploadImage(profilePhoto, 'profiles');
+      profileImageUrl = upload.data.url;
+    }
+
     const user = this.usersRepo.create({
       username: dto.username,
       email: dto.email,
@@ -87,6 +110,7 @@ export class AuthService {
       mobile: dto.mobile ?? null,
       referralCode,
       referredById: referrer?.id ?? null,
+      profileImageUrl,
       status: 'ACTIVE',
       role: 'USER',
     });
@@ -109,10 +133,12 @@ export class AuthService {
       throw new UnauthorizedException('Your account has been rejected. Please contact support.');
     }
 
+    const withReferral = await this.ensureReferralCode(user);
+
     const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+      sub: withReferral.id,
+      email: withReferral.email,
+      role: withReferral.role,
     });
 
     return {
@@ -120,7 +146,8 @@ export class AuthService {
       data: {
         accessToken: token,
         tokenType: 'Bearer',
-        user: this.sanitizeUser(user),
+        referralCode: withReferral.referralCode,
+        user: this.sanitizeUser(withReferral),
       },
     };
   }
@@ -128,7 +155,25 @@ export class AuthService {
   async getMe(userId: string) {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
-    return { message: 'Profile fetched', data: this.sanitizeUser(user) };
+    const withReferral = await this.ensureReferralCode(user);
+    return { message: 'Profile fetched', data: this.sanitizeUser(withReferral) };
+  }
+
+  /** Ensures every account has a unique referral code (signup generates one; this backfills edge cases). */
+  private async ensureReferralCode(user: User): Promise<User> {
+    if (user.referralCode?.trim()) {
+      return user;
+    }
+    for (let attempt = 0; attempt < 24; attempt++) {
+      const code = this.generateReferralCode();
+      const clash = await this.usersRepo.findOne({ where: { referralCode: code } });
+      if (!clash) {
+        await this.usersRepo.update(user.id, { referralCode: code });
+        user.referralCode = code;
+        return user;
+      }
+    }
+    throw new InternalServerErrorException('Could not assign referral code');
   }
 
   private generateReferralCode(): string {

@@ -8,7 +8,12 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 
-export type TransactionType = 'DEPOSIT' | 'WITHDRAWAL' | 'COMMISSION';
+export type TransactionType =
+  | 'DEPOSIT'
+  | 'WITHDRAWAL'
+  | 'COMMISSION'
+  | 'STAKE'
+  | 'STAKE_ROI';
 export type TransactionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 @Entity('wallet_transactions')

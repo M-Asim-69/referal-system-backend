@@ -52,31 +52,42 @@ async function bootstrap() {
 REST API for referral + investment platform. All amounts in **USD**.
 
 ## Auth
-- **Register:** \`POST /api/v1/auth/register\` — JSON: \`username\`, \`email\`, \`password\`, \`fullName\`; optional \`mobile\`, \`referralCode\`. User is **ACTIVE**; can login immediately.
-- **Login:** \`POST /api/v1/auth/login\` — returns JWT. Use header \`Authorization: Bearer <token>\` on protected routes.
+- **Register:** \`POST /api/v1/auth/register\` — multipart: \`username\`, \`email\`, \`password\`, \`fullName\`; optional \`mobile\`, \`referralCode\`, \`profilePhoto\`. User is **ACTIVE**; can login immediately.
+- **Login:** \`POST /api/v1/auth/login\` — returns JWT + **referralCode** (top-level and on \`user\`) for sharing. Use header \`Authorization: Bearer <token>\` on protected routes.
 - **Admin register:** \`POST /api/v1/auth/register-admin\` — header \`x-admin-register-secret\` required.
 
 ## Limits (USD)
 - **Min deposit:** $5. **Min withdrawal:** $3.
-- Deposit/Withdrawal: **manual** (admin approves).
+- Deposit/Withdrawal: **manual** (admin approves). Each allows **one pending** request at a time; withdrawal also requires a **screenshot** (like deposit).
 
 ## Deposit
 - \`POST /api/v1/wallet/deposits\`: \`amount\` (≥5) + screenshot (multipart). Screenshot is stored in Cloudinary.
-- Response: wait up to 24 hours for admin approval. On approve: deposit amount is credited and level commissions are paid to eligible referrers.
+
+## Withdrawal
+- \`POST /api/v1/wallet/withdrawals\`: \`amount\` (≥3) + screenshot. Admin lists and approves/rejects.
+
+## Stake
+- \`POST /api/v1/wallet/stakes\` — JSON \`{ "amount": number }\` (min $5). Requires approved deposit + wallet balance. **One pending** stake at a time.
+- Admin: \`GET /admin/stakes\`, \`PATCH /admin/stakes/:id/approve\` or \`reject\`. On approve: wallet → **stakedBalance** (locked).
+- **2% daily** profit only on \`stakedBalance\` (deposits do not earn daily ROI).
+
+## Profile
+- \`PATCH /api/v1/users/profile\` — multipart: optional \`fullName\`, \`photo\`, payment fields.
 
 ## Level income (when referred user’s deposit is approved)
 Only referrers who have **at least one approved deposit** receive commission:
 - **Level 1:** 10% · Level 2: 5% · Level 3: 3% · Level 4: 2% · Level 5: 1% (total 21%).
 
-## ROI
-- **2% daily** on \`totalDepositInvestment\` (sum of approved deposits). Credited automatically once per day.
+## Daily profit
+- **2% daily** on \`stakedBalance\` only (admin-approved stakes). Credited once per day (UTC). \`totalDepositInvestment\` is for tracking / commissions, not daily ROI.
 
 ## User stats (after login)
-- \`GET /api/v1/wallet/balance\` — current balance (USD).
-- \`GET /api/v1/wallet/transactions\` — history (deposits, withdrawals, commissions, ROI).
+- \`GET /api/v1/users/dashboard-stats\` — **one call** for UI: wallet, staked, \`referralCode\`, direct/total team size, deposit & withdrawal totals, \`totalIncome\` + \`directIncome\` / \`levelsIncome\` / \`stakingIncome\`.
+- \`GET /api/v1/wallet/balance\` — liquid balance + \`stakedBalance\` (USD).
+- \`GET /api/v1/wallet/transactions\` — full history.
 - \`GET /api/v1/wallet/deposits\`, \`GET /api/v1/wallet/withdrawals\` — lists.
-- \`GET /api/v1/users/referrals\` — referral tree.
-- Profile includes \`referralCode\` for sharing.
+- \`GET /api/v1/users/referrals\` — direct team members (paginated; use \`meta.total\` for **Direct team** count).
+- Profile / login includes \`referralCode\` for sharing links (\`?refcode=\`).
       `,
     )
     .setVersion('1.0')

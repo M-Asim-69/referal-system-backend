@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/user.entity';
 import { Deposit } from '../wallet/deposit.entity';
+import { FilesModule } from '../files/files.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { Deposit } from '../wallet/deposit.entity';
       }),
     }),
     TypeOrmModule.forFeature([User, Deposit]),
+    FilesModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

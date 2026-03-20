@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { User, UserStatus } from '../users/user.entity';
 import { Deposit } from '../wallet/deposit.entity';
 import { Withdrawal } from '../wallet/withdrawal.entity';
+import { Stake } from '../wallet/stake.entity';
 import { WalletTransaction } from '../wallet/wallet-transaction.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -21,6 +22,8 @@ export class AdminService {
     private readonly depositsRepo: Repository<Deposit>,
     @InjectRepository(Withdrawal)
     private readonly withdrawalsRepo: Repository<Withdrawal>,
+    @InjectRepository(Stake)
+    private readonly stakesRepo: Repository<Stake>,
     private readonly walletService: WalletService,
   ) {}
 
@@ -33,6 +36,8 @@ export class AdminService {
       pendingDeposits,
       totalWithdrawals,
       pendingWithdrawals,
+      totalStakes,
+      pendingStakes,
     ] = await Promise.all([
       this.usersRepo.count({ where: { role: 'USER' } }),
       this.usersRepo.count({ where: { role: 'USER', status: 'ACTIVE' } }),
@@ -41,6 +46,8 @@ export class AdminService {
       this.depositsRepo.count({ where: { status: 'PENDING' } }),
       this.withdrawalsRepo.count(),
       this.withdrawalsRepo.count({ where: { status: 'PENDING' } }),
+      this.stakesRepo.count(),
+      this.stakesRepo.count({ where: { status: 'PENDING' } }),
     ]);
 
     return {
@@ -49,6 +56,7 @@ export class AdminService {
         users: { total: totalUsers, active: activeUsers, pending: pendingUsers },
         deposits: { total: totalDeposits, pending: pendingDeposits },
         withdrawals: { total: totalWithdrawals, pending: pendingWithdrawals },
+        stakes: { total: totalStakes, pending: pendingStakes },
       },
     };
   }
@@ -63,7 +71,7 @@ export class AdminService {
         'id', 'username', 'email', 'fullName', 'mobile', 'role', 'status',
         'referralCode', 'referredById', 'walletBalance', 'totalDepositInvestment',
         'paymentAccountNumber', 'paymentAccountBank',
-        'profileImageUrl', 'createdAt', 'updatedAt',
+        'profileImageUrl', 'stakedBalance', 'createdAt', 'updatedAt',
       ],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -85,18 +93,21 @@ export class AdminService {
         id: true, username: true, email: true, fullName: true, mobile: true, role: true, status: true,
         referralCode: true, referredById: true, walletBalance: true, totalDepositInvestment: true,
         paymentAccountNumber: true, paymentAccountBank: true,
-        profileImageUrl: true, createdAt: true, updatedAt: true,
+        profileImageUrl: true, stakedBalance: true, createdAt: true, updatedAt: true,
         referredBy: { id: true, username: true, fullName: true, email: true },
         directReferrals: { id: true, username: true, fullName: true, email: true, status: true },
       },
     });
     if (!user) throw new NotFoundException('User not found');
 
-    const deposits = await this.depositsRepo.find({ where: { userId: id }, order: { createdAt: 'DESC' } });
+    const [deposits, stakes] = await Promise.all([
+      this.depositsRepo.find({ where: { userId: id }, order: { createdAt: 'DESC' } }),
+      this.stakesRepo.find({ where: { userId: id }, order: { createdAt: 'DESC' } }),
+    ]);
 
     return {
       message: 'User details fetched',
-      data: { ...user, deposits },
+      data: { ...user, deposits, stakes },
     };
   }
 
@@ -157,6 +168,7 @@ export class AdminService {
 
     await this.usersRepo.manager.transaction(async (manager) => {
       await manager.delete(WalletTransaction, { userId });
+      await manager.delete(Stake, { userId });
       await manager.delete(Withdrawal, { userId });
       await manager.delete(Deposit, { userId });
       await manager.update(User, { referredById: userId }, { referredById: null });
@@ -245,5 +257,44 @@ export class AdminService {
   async rejectWithdrawal(withdrawalId: string) {
     await this.walletService.rejectWithdrawal(withdrawalId);
     return { message: 'Withdrawal rejected' };
+  }
+
+  async getAllStakes(pagination: PaginationDto, status?: string) {
+    const { page, limit } = pagination;
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+
+    const [data, total] = await this.stakesRepo.findAndCount({
+      where,
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const safeData = data.map((s) => {
+      if (s.user) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { passwordHash, ...safeUser } = s.user as User & { passwordHash: string };
+        return { ...s, user: safeUser };
+      }
+      return s;
+    });
+
+    return {
+      message: 'Stakes fetched successfully',
+      data: safeData,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async approveStake(stakeId: string) {
+    await this.walletService.approveStake(stakeId);
+    return { message: 'Stake approved — funds moved to user staked balance' };
+  }
+
+  async rejectStake(stakeId: string) {
+    await this.walletService.rejectStake(stakeId);
+    return { message: 'Stake request rejected' };
   }
 }
