@@ -36,17 +36,28 @@ export class WalletController {
   @Get('balance')
   @ApiOperation({
     summary: 'Get my wallet balance',
-    description: 'Liquid wallet balance + staked balance (locked until unstake feature; earns daily stake ROI when > 0).',
+    description:
+      'Liquid wallet balance + staked balance (locked until unstake feature; earns daily stake ROI when > 0).',
   })
-  @ApiResponse({ status: 200, description: 'balance, stakedBalance, currency (USD)' })
+  @ApiResponse({
+    status: 200,
+    description: 'balance, stakedBalance, currency (USD)',
+  })
   getBalance(@CurrentUser() user: User) {
     return this.walletService.getBalance(user.id);
   }
 
   @Get('transactions')
   @ApiOperation({ summary: 'Get my wallet transaction history' })
-  @ApiResponse({ status: 200, description: 'Paginated transaction history (deposits, withdrawals, commissions)' })
-  getTransactions(@CurrentUser() user: User, @Query() pagination: PaginationDto) {
+  @ApiResponse({
+    status: 200,
+    description:
+      'Paginated transaction history (deposits, withdrawals, commissions)',
+  })
+  getTransactions(
+    @CurrentUser() user: User,
+    @Query() pagination: PaginationDto,
+  ) {
     return this.walletService.getTransactions(user.id, pagination);
   }
 
@@ -69,8 +80,14 @@ export class WalletController {
       required: ['amount', 'screenshot'],
     },
   })
-  @ApiResponse({ status: 201, description: 'Deposit submitted; wait up to 24h for approval' })
-  @ApiResponse({ status: 400, description: 'Min $5, proof required, or account not active' })
+  @ApiResponse({
+    status: 201,
+    description: 'Deposit submitted; wait up to 24h for approval',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Min $5, proof required, or account not active',
+  })
   createDeposit(
     @CurrentUser() user: User,
     @Body() dto: CreateDepositDto,
@@ -100,15 +117,20 @@ export class WalletController {
       type: 'object',
       properties: {
         amount: { type: 'number', format: 'float', example: 3 },
+        password: { type: 'string', example: 'MySecurePass123' },
         screenshot: { type: 'string', format: 'binary' },
       },
-      required: ['amount', 'screenshot'],
+      required: ['amount', 'password', 'screenshot'],
     },
   })
-  @ApiResponse({ status: 201, description: 'Withdrawal submitted; pending admin approval' })
+  @ApiResponse({
+    status: 201,
+    description: 'Withdrawal submitted; pending admin approval',
+  })
   @ApiResponse({
     status: 400,
-    description: 'Min $3, proof required, insufficient balance, or existing pending withdrawal',
+    description:
+      'Min $3, proof required, insufficient balance, or existing pending withdrawal',
   })
   createWithdrawal(
     @CurrentUser() user: User,
@@ -121,7 +143,10 @@ export class WalletController {
   @Get('withdrawals')
   @ApiOperation({ summary: 'Get my withdrawal history' })
   @ApiResponse({ status: 200, description: 'Paginated withdrawal history' })
-  getWithdrawals(@CurrentUser() user: User, @Query() pagination: PaginationDto) {
+  getWithdrawals(
+    @CurrentUser() user: User,
+    @Query() pagination: PaginationDto,
+  ) {
     return this.walletService.getWithdrawals(user.id, pagination);
   }
 
@@ -132,8 +157,15 @@ export class WalletController {
     description:
       'JSON body: amount (min $5). Requires at least one approved deposit and enough wallet balance. One pending stake at a time. Admin approves → amount moves wallet → stakedBalance; daily 2% ROI on stakedBalance.',
   })
-  @ApiResponse({ status: 201, description: 'Stake request created; pending admin' })
-  @ApiResponse({ status: 400, description: 'Validation, no deposit, insufficient balance, or pending stake exists' })
+  @ApiResponse({
+    status: 201,
+    description: 'Stake request created; pending admin',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Validation, no deposit, insufficient balance, or pending stake exists',
+  })
   createStake(@CurrentUser() user: User, @Body() dto: CreateStakeDto) {
     return this.walletService.createStakeRequest(user.id, dto);
   }

@@ -41,10 +41,14 @@ export class AuthService {
   ) {
     const expected = this.configService.get<string>('adminRegisterSecret');
     if (!expected || secretHeader !== expected) {
-      throw new ForbiddenException('Invalid or missing admin registration secret');
+      throw new ForbiddenException(
+        'Invalid or missing admin registration secret',
+      );
     }
 
-    const existing = await this.usersRepo.findOne({ where: { email: dto.email } });
+    const existing = await this.usersRepo.findOne({
+      where: { email: dto.email },
+    });
     if (existing) throw new ConflictException('Email is already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
@@ -52,7 +56,10 @@ export class AuthService {
 
     let profileImageUrl: string | null = null;
     if (profilePhoto?.buffer?.length) {
-      const upload = await this.filesService.uploadImage(profilePhoto, 'profiles');
+      const upload = await this.filesService.uploadImage(
+        profilePhoto,
+        'profiles',
+      );
       profileImageUrl = upload.data.url;
     }
 
@@ -81,15 +88,26 @@ export class AuthService {
    * User register: multipart/form-data (same fields as before + optional profilePhoto file).
    * User is ACTIVE; can login and deposit (min $5 + proof).
    */
-  async registerUser(dto: RegisterUserDto, profilePhoto: Express.Multer.File | undefined) {
-    const existingEmail = await this.usersRepo.findOne({ where: { email: dto.email } });
-    if (existingEmail) throw new ConflictException('Email is already registered');
-    const existingUsername = await this.usersRepo.findOne({ where: { username: dto.username } });
-    if (existingUsername) throw new ConflictException('Username is already taken');
+  async registerUser(
+    dto: RegisterUserDto,
+    profilePhoto: Express.Multer.File | undefined,
+  ) {
+    const existingEmail = await this.usersRepo.findOne({
+      where: { email: dto.email },
+    });
+    if (existingEmail)
+      throw new ConflictException('Email is already registered');
+    const existingUsername = await this.usersRepo.findOne({
+      where: { username: dto.username },
+    });
+    if (existingUsername)
+      throw new ConflictException('Username is already taken');
 
     let referrer: User | null = null;
     if (dto.referralCode) {
-      referrer = await this.usersRepo.findOne({ where: { referralCode: dto.referralCode } });
+      referrer = await this.usersRepo.findOne({
+        where: { referralCode: dto.referralCode },
+      });
       if (!referrer) throw new BadRequestException('Invalid referral code');
     }
 
@@ -98,7 +116,10 @@ export class AuthService {
 
     let profileImageUrl: string | null = null;
     if (profilePhoto?.buffer?.length) {
-      const upload = await this.filesService.uploadImage(profilePhoto, 'profiles');
+      const upload = await this.filesService.uploadImage(
+        profilePhoto,
+        'profiles',
+      );
       profileImageUrl = upload.data.url;
     }
 
@@ -117,7 +138,8 @@ export class AuthService {
 
     const savedUser = await this.usersRepo.save(user);
     return {
-      message: 'Registration successful. You can login and make a deposit (min $5 with payment proof).',
+      message:
+        'Registration successful. You can login and make a deposit (min $5 with payment proof).',
       data: this.sanitizeUser(savedUser),
     };
   }
@@ -126,11 +148,17 @@ export class AuthService {
     const user = await this.usersRepo.findOne({ where: { email: dto.email } });
     if (!user) throw new UnauthorizedException('Invalid email or password');
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) throw new UnauthorizedException('Invalid email or password');
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
+    if (!isPasswordValid)
+      throw new UnauthorizedException('Invalid email or password');
 
     if (user.status === 'REJECTED') {
-      throw new UnauthorizedException('Your account has been rejected. Please contact support.');
+      throw new UnauthorizedException(
+        'Your account has been rejected. Please contact support.',
+      );
     }
 
     const withReferral = await this.ensureReferralCode(user);
@@ -156,7 +184,10 @@ export class AuthService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
     const withReferral = await this.ensureReferralCode(user);
-    return { message: 'Profile fetched', data: this.sanitizeUser(withReferral) };
+    return {
+      message: 'Profile fetched',
+      data: this.sanitizeUser(withReferral),
+    };
   }
 
   /** Ensures every account has a unique referral code (signup generates one; this backfills edge cases). */
@@ -166,7 +197,9 @@ export class AuthService {
     }
     for (let attempt = 0; attempt < 24; attempt++) {
       const code = this.generateReferralCode();
-      const clash = await this.usersRepo.findOne({ where: { referralCode: code } });
+      const clash = await this.usersRepo.findOne({
+        where: { referralCode: code },
+      });
       if (!clash) {
         await this.usersRepo.update(user.id, { referralCode: code });
         user.referralCode = code;

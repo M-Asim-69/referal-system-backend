@@ -35,9 +35,15 @@ export class StakesAndUserStakedBalance1710000000007 implements MigrationInterfa
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "stakes" DROP CONSTRAINT IF EXISTS "FK_stakes_user";`);
+    await queryRunner.query(
+      `ALTER TABLE "stakes" DROP CONSTRAINT IF EXISTS "FK_stakes_user";`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "stakes";`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "lastStakeRoiAt";`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "stakedBalance";`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "lastStakeRoiAt";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "stakedBalance";`,
+    );
   }
 }

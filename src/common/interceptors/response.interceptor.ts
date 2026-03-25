@@ -32,9 +32,10 @@ interface ControllerResponse<T = unknown> {
 }
 
 @Injectable()
-export class ResponseInterceptor<T>
-  implements NestInterceptor<T, ApiResponse<T>>
-{
+export class ResponseInterceptor<T> implements NestInterceptor<
+  T,
+  ApiResponse<T>
+> {
   intercept(
     context: ExecutionContext,
     next: CallHandler<T>,
@@ -47,14 +48,13 @@ export class ResponseInterceptor<T>
       map((payload) => {
         const res = payload as ControllerResponse<T>;
         const hasWrapper =
-          res !== null &&
-          typeof res === 'object' &&
-          'data' in res;
+          res !== null && typeof res === 'object' && 'data' in res;
 
         return {
           success: true,
           statusCode: response.statusCode,
-          message: (hasWrapper ? res.message : undefined) ?? 'Request successful',
+          message:
+            (hasWrapper ? res.message : undefined) ?? 'Request successful',
           data: hasWrapper ? (res.data as T) : payload,
           ...(hasWrapper && res.meta ? { meta: res.meta } : {}),
           timestamp: new Date().toISOString(),

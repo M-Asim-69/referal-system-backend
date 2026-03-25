@@ -48,7 +48,9 @@ export class AdminController {
   }
 
   @Get('users/:id')
-  @ApiOperation({ summary: 'Get full user details with referrals and deposit history' })
+  @ApiOperation({
+    summary: 'Get full user details with referrals and deposit history',
+  })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'User details' })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -58,9 +60,16 @@ export class AdminController {
 
   @Patch('users/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve pending user', description: 'Sets user ACTIVE. If they have a pending INITIAL deposit, credits it and runs commissions (legacy flow).' })
+  @ApiOperation({
+    summary: 'Approve pending user',
+    description:
+      'Sets user ACTIVE. If they have a pending INITIAL deposit, credits it and runs commissions (legacy flow).',
+  })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'User approved, commissions distributed' })
+  @ApiResponse({
+    status: 200,
+    description: 'User approved, commissions distributed',
+  })
   @ApiResponse({ status: 400, description: 'User not in pending state' })
   @ApiResponse({ status: 404, description: 'User not found' })
   approveUser(@Param('id', ParseUUIDPipe) id: string) {
@@ -94,18 +103,36 @@ export class AdminController {
   }
 
   @Get('deposits')
-  @ApiOperation({ summary: 'List deposits', description: 'Manual approval. Min user deposit $5 + paymentProofUrl. Approve via PATCH /admin/deposits/:id/approve.' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'APPROVED', 'REJECTED'] })
+  @ApiOperation({
+    summary: 'List deposits',
+    description:
+      'Manual approval. Min user deposit $5 + paymentProofUrl. Approve via PATCH /admin/deposits/:id/approve.',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING', 'APPROVED', 'REJECTED'],
+  })
   @ApiResponse({ status: 200, description: 'Paginated deposit list' })
-  getAllDeposits(@Query() pagination: PaginationDto, @Query('status') status?: string) {
+  getAllDeposits(
+    @Query() pagination: PaginationDto,
+    @Query('status') status?: string,
+  ) {
     return this.adminService.getAllDeposits(pagination, status);
   }
 
   @Patch('deposits/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve deposit', description: 'Credits deposit amount, updates totalDepositInvestment, and distributes level commissions (10,5,3,2,1%) to referrers with approved deposit.' })
+  @ApiOperation({
+    summary: 'Approve deposit',
+    description:
+      'Credits deposit amount, updates totalDepositInvestment, and distributes level commissions (10,5,3,2,1%) to referrers with approved deposit.',
+  })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Deposit approved, wallet credited' })
+  @ApiResponse({
+    status: 200,
+    description: 'Deposit approved, wallet credited',
+  })
   @ApiResponse({ status: 400, description: 'Deposit not in pending state' })
   @ApiResponse({ status: 404, description: 'Deposit not found' })
   approveDeposit(@Param('id', ParseUUIDPipe) id: string) {
@@ -128,18 +155,33 @@ export class AdminController {
     description:
       'Manual approval. User submits amount + paymentProofUrl (screenshot), same idea as deposits. Approve via PATCH /admin/withdrawals/:id/approve.',
   })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'APPROVED', 'REJECTED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING', 'APPROVED', 'REJECTED'],
+  })
   @ApiResponse({ status: 200, description: 'Paginated withdrawal list' })
-  getAllWithdrawals(@Query() pagination: PaginationDto, @Query('status') status?: string) {
+  getAllWithdrawals(
+    @Query() pagination: PaginationDto,
+    @Query('status') status?: string,
+  ) {
     return this.adminService.getAllWithdrawals(pagination, status);
   }
 
   @Patch('withdrawals/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve a pending withdrawal and deduct from user wallet' })
+  @ApiOperation({
+    summary: 'Approve a pending withdrawal and deduct from user wallet',
+  })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Withdrawal approved, wallet debited' })
-  @ApiResponse({ status: 400, description: 'Insufficient balance or not in pending state' })
+  @ApiResponse({
+    status: 200,
+    description: 'Withdrawal approved, wallet debited',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Insufficient balance or not in pending state',
+  })
   @ApiResponse({ status: 404, description: 'Withdrawal not found' })
   approveWithdrawal(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.approveWithdrawal(id);
@@ -158,20 +200,33 @@ export class AdminController {
   @Get('stakes')
   @ApiOperation({
     summary: 'List stake requests',
-    description: 'User requests to move wallet funds into staked balance. Approve moves wallet → staked; user earns daily 2% on staked total.',
+    description:
+      'User requests to move wallet funds into staked balance. Approve moves wallet → staked; user earns daily 2% on staked total.',
   })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'APPROVED', 'REJECTED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING', 'APPROVED', 'REJECTED'],
+  })
   @ApiResponse({ status: 200, description: 'Paginated stake list' })
-  getAllStakes(@Query() pagination: PaginationDto, @Query('status') status?: string) {
+  getAllStakes(
+    @Query() pagination: PaginationDto,
+    @Query('status') status?: string,
+  ) {
     return this.adminService.getAllStakes(pagination, status);
   }
 
   @Patch('stakes/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve stake — debit wallet, credit stakedBalance' })
+  @ApiOperation({
+    summary: 'Approve stake — debit wallet, credit stakedBalance',
+  })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Stake approved' })
-  @ApiResponse({ status: 400, description: 'Not pending or insufficient user wallet' })
+  @ApiResponse({
+    status: 400,
+    description: 'Not pending or insufficient user wallet',
+  })
   @ApiResponse({ status: 404, description: 'Stake not found' })
   approveStake(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.approveStake(id);

@@ -8,7 +8,10 @@ import { WalletTransaction } from '../wallet/wallet-transaction.entity';
 import { Withdrawal } from '../wallet/withdrawal.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, WalletTransaction, Withdrawal]), FilesModule],
+  imports: [
+    TypeOrmModule.forFeature([User, WalletTransaction, Withdrawal]),
+    FilesModule,
+  ],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService, TypeOrmModule],

@@ -7,7 +7,8 @@ export class InitSchema1710000000000 implements MigrationInterface {
     const usersExists = await queryRunner.hasTable('users');
 
     if (usersExists) {
-      const hasPasswordHash = await this.usersHasPasswordHashColumn(queryRunner);
+      const hasPasswordHash =
+        await this.usersHasPasswordHashColumn(queryRunner);
       if (hasPasswordHash) {
         return; // schema already matches entity + SeedAdmin
       }
@@ -19,7 +20,9 @@ export class InitSchema1710000000000 implements MigrationInterface {
   }
 
   /** True if users table has quoted column "passwordHash" (entity + SeedAdmin expect it). */
-  private async usersHasPasswordHashColumn(queryRunner: QueryRunner): Promise<boolean> {
+  private async usersHasPasswordHashColumn(
+    queryRunner: QueryRunner,
+  ): Promise<boolean> {
     const rows = await queryRunner.query(`
       SELECT 1 FROM pg_attribute a
       JOIN pg_class c ON a.attrelid = c.oid

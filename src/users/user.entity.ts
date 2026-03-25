@@ -29,6 +29,10 @@ export class User {
   @Column()
   passwordHash: string;
 
+  @Exclude()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  withdrawPasswordHash: string | null;
+
   @Column()
   fullName: string;
 

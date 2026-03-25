@@ -114,7 +114,9 @@ Only referrers who have **at least one approved deposit** receive commission:
   await app.listen(port);
 
   console.log(`\n🚀 Application running on: http://localhost:${port}/api/v1`);
-  console.log(`📖 Swagger docs available at: http://localhost:${port}/api/docs\n`);
+  console.log(
+    `📖 Swagger docs available at: http://localhost:${port}/api/docs\n`,
+  );
 }
 
 bootstrap();

@@ -18,6 +18,7 @@ import { UsersModule } from './users/users.module';
 import { WalletModule } from './wallet/wallet.module';
 import { AdminModule } from './admin/admin.module';
 import { FilesModule } from './files/files.module';
+import { IssuesModule } from './issues/issues.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -33,6 +34,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     WalletModule,
     AdminModule,
     FilesModule,
+    IssuesModule,
   ],
   controllers: [AppController],
   providers: [

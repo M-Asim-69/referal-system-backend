@@ -53,7 +53,11 @@ export class AdminService {
     return {
       message: 'Dashboard stats fetched',
       data: {
-        users: { total: totalUsers, active: activeUsers, pending: pendingUsers },
+        users: {
+          total: totalUsers,
+          active: activeUsers,
+          pending: pendingUsers,
+        },
         deposits: { total: totalDeposits, pending: pendingDeposits },
         withdrawals: { total: totalWithdrawals, pending: pendingWithdrawals },
         stakes: { total: totalStakes, pending: pendingStakes },
@@ -63,15 +67,30 @@ export class AdminService {
 
   async getUsers(pagination: PaginationDto) {
     const { page, limit } = pagination;
-    const where: Partial<{ role: 'USER'; status: UserStatus }> = { role: 'USER' };
+    const where: Partial<{ role: 'USER'; status: UserStatus }> = {
+      role: 'USER',
+    };
 
     const [data, total] = await this.usersRepo.findAndCount({
       where,
       select: [
-        'id', 'username', 'email', 'fullName', 'mobile', 'role', 'status',
-        'referralCode', 'referredById', 'walletBalance', 'totalDepositInvestment',
-        'paymentAccountNumber', 'paymentAccountBank',
-        'profileImageUrl', 'stakedBalance', 'createdAt', 'updatedAt',
+        'id',
+        'username',
+        'email',
+        'fullName',
+        'mobile',
+        'role',
+        'status',
+        'referralCode',
+        'referredById',
+        'walletBalance',
+        'totalDepositInvestment',
+        'paymentAccountNumber',
+        'paymentAccountBank',
+        'profileImageUrl',
+        'stakedBalance',
+        'createdAt',
+        'updatedAt',
       ],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -90,19 +109,44 @@ export class AdminService {
       where: { id },
       relations: ['referredBy', 'directReferrals'],
       select: {
-        id: true, username: true, email: true, fullName: true, mobile: true, role: true, status: true,
-        referralCode: true, referredById: true, walletBalance: true, totalDepositInvestment: true,
-        paymentAccountNumber: true, paymentAccountBank: true,
-        profileImageUrl: true, stakedBalance: true, createdAt: true, updatedAt: true,
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        mobile: true,
+        role: true,
+        status: true,
+        referralCode: true,
+        referredById: true,
+        walletBalance: true,
+        totalDepositInvestment: true,
+        paymentAccountNumber: true,
+        paymentAccountBank: true,
+        profileImageUrl: true,
+        stakedBalance: true,
+        createdAt: true,
+        updatedAt: true,
         referredBy: { id: true, username: true, fullName: true, email: true },
-        directReferrals: { id: true, username: true, fullName: true, email: true, status: true },
+        directReferrals: {
+          id: true,
+          username: true,
+          fullName: true,
+          email: true,
+          status: true,
+        },
       },
     });
     if (!user) throw new NotFoundException('User not found');
 
     const [deposits, stakes] = await Promise.all([
-      this.depositsRepo.find({ where: { userId: id }, order: { createdAt: 'DESC' } }),
-      this.stakesRepo.find({ where: { userId: id }, order: { createdAt: 'DESC' } }),
+      this.depositsRepo.find({
+        where: { userId: id },
+        order: { createdAt: 'DESC' },
+      }),
+      this.stakesRepo.find({
+        where: { userId: id },
+        order: { createdAt: 'DESC' },
+      }),
     ]);
 
     return {
@@ -115,7 +159,9 @@ export class AdminService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.status !== 'PENDING') {
-      throw new BadRequestException(`User is already ${user.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `User is already ${user.status.toLowerCase()}`,
+      );
     }
 
     const initialDeposit = await this.depositsRepo.findOne({
@@ -149,7 +195,9 @@ export class AdminService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.status !== 'PENDING') {
-      throw new BadRequestException(`User is already ${user.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `User is already ${user.status.toLowerCase()}`,
+      );
     }
     await this.usersRepo.update(userId, { status: 'REJECTED' });
     return { message: 'User rejected successfully' };
@@ -171,7 +219,11 @@ export class AdminService {
       await manager.delete(Stake, { userId });
       await manager.delete(Withdrawal, { userId });
       await manager.delete(Deposit, { userId });
-      await manager.update(User, { referredById: userId }, { referredById: null });
+      await manager.update(
+        User,
+        { referredById: userId },
+        { referredById: null },
+      );
       await manager.delete(User, userId);
     });
 
@@ -197,7 +249,9 @@ export class AdminService {
     const safeData = data.map((d) => {
       if (d.user) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { passwordHash, ...safeUser } = d.user as User & { passwordHash: string };
+        const { passwordHash, ...safeUser } = d.user as User & {
+          passwordHash: string;
+        };
         return { ...d, user: safeUser };
       }
       return d;
@@ -236,7 +290,9 @@ export class AdminService {
     const safeData = data.map((w) => {
       if (w.user) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { passwordHash, ...safeUser } = w.user as User & { passwordHash: string };
+        const { passwordHash, ...safeUser } = w.user as User & {
+          passwordHash: string;
+        };
         return { ...w, user: safeUser };
       }
       return w;
@@ -275,7 +331,9 @@ export class AdminService {
     const safeData = data.map((s) => {
       if (s.user) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { passwordHash, ...safeUser } = s.user as User & { passwordHash: string };
+        const { passwordHash, ...safeUser } = s.user as User & {
+          passwordHash: string;
+        };
         return { ...s, user: safeUser };
       }
       return s;

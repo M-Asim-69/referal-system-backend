@@ -10,7 +10,12 @@ import { v2 as cloudinaryV2 } from 'cloudinary';
 import { UploadApiResponse } from 'cloudinary';
 import { CLOUDINARY } from './cloudinary.provider';
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/jpg',
+];
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 @Injectable()
@@ -45,7 +50,6 @@ export class FilesService implements OnApplicationBootstrap {
   }> {
     return new Promise((resolve) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const api = (this.cloudinary as any).api;
         if (!api || typeof api.ping !== 'function') {
           resolve({
@@ -54,29 +58,38 @@ export class FilesService implements OnApplicationBootstrap {
           });
           return;
         }
-        api.ping((err: Error & { http_code?: number; message?: string }, result: unknown) => {
-          if (err) {
-            const msg =
-              err.message ||
-              (typeof err === 'object' && err !== null && 'error' in err
-                ? String((err as { error: unknown }).error)
-                : JSON.stringify(err));
+        api.ping(
+          (
+            err: Error & { http_code?: number; message?: string },
+            result: unknown,
+          ) => {
+            if (err) {
+              const msg =
+                err.message ||
+                (typeof err === 'object' && err !== null && 'error' in err
+                  ? String((err as { error: unknown }).error)
+                  : JSON.stringify(err));
+              resolve({
+                ok: false,
+                message:
+                  'Not connected — fix CLOUDINARY_URL or CLOUDINARY_* in .env',
+                error: msg,
+              });
+              return;
+            }
+            const status =
+              result &&
+              typeof result === 'object' &&
+              result !== null &&
+              'status' in result
+                ? String((result as { status: unknown }).status)
+                : 'ok';
             resolve({
-              ok: false,
-              message: 'Not connected — fix CLOUDINARY_URL or CLOUDINARY_* in .env',
-              error: msg,
+              ok: true,
+              message: `connected (ping status: ${status})`,
             });
-            return;
-          }
-          const status =
-            result && typeof result === 'object' && result !== null && 'status' in result
-              ? String((result as { status: unknown }).status)
-              : 'ok';
-          resolve({
-            ok: true,
-            message: `connected (ping status: ${status})`,
-          });
-        });
+          },
+        );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         resolve({
@@ -91,7 +104,10 @@ export class FilesService implements OnApplicationBootstrap {
   async uploadImage(
     file: Express.Multer.File,
     folder = 'network-marketing',
-  ): Promise<{ message: string; data: { url: string; publicId: string; format: string; bytes: number } }> {
+  ): Promise<{
+    message: string;
+    data: { url: string; publicId: string; format: string; bytes: number };
+  }> {
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(
         `Invalid file type: ${file.mimetype}. Allowed types: JPEG, PNG, WEBP`,
@@ -135,15 +151,17 @@ export class FilesService implements OnApplicationBootstrap {
               error.message && typeof error.message === 'string'
                 ? `Image upload failed: ${error.message}`
                 : 'Image upload failed (Cloudinary rejected the request)';
-            return reject(
-              new InternalServerErrorException(`${msg}. ${hint}`),
-            );
+            return reject(new InternalServerErrorException(`${msg}. ${hint}`));
           }
           if (!result?.secure_url) {
             this.logger.error('Cloudinary returned no secure_url');
-            return reject(new InternalServerErrorException('Image upload failed: empty response'));
+            return reject(
+              new InternalServerErrorException(
+                'Image upload failed: empty response',
+              ),
+            );
           }
-          resolve(result as UploadApiResponse);
+          resolve(result);
         },
       );
       stream.end(buffer);

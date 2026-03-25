@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
@@ -8,6 +12,7 @@ import { FilesService } from '../files/files.service';
 import { WalletTransaction } from '../wallet/wallet-transaction.entity';
 import { Withdrawal } from '../wallet/withdrawal.entity';
 import { APP_CURRENCY } from '../common/constants/commission.constants';
+import bcrypt from 'bcryptjs';
 
 export interface UserDashboardStats {
   currency: string;
@@ -38,7 +43,10 @@ export class UsersService {
 
   async getProfile(userId: string) {
     const user = await this.findOrFail(userId);
-    return { message: 'Profile fetched successfully', data: this.sanitize(user) };
+    return {
+      message: 'Profile fetched successfully',
+      data: this.sanitize(user),
+    };
   }
 
   async updateProfile(
@@ -73,10 +81,15 @@ export class UsersService {
     }
 
     const updated = await this.usersRepo.save(user);
-    return { message: 'Profile updated successfully', data: this.sanitize(updated) };
+    return {
+      message: 'Profile updated successfully',
+      data: this.sanitize(updated),
+    };
   }
 
-  async getDashboardStats(userId: string): Promise<{ message: string; data: UserDashboardStats }> {
+  async getDashboardStats(
+    userId: string,
+  ): Promise<{ message: string; data: UserDashboardStats }> {
     const user = await this.usersRepo.findOne({
       where: { id: userId },
       select: [
@@ -89,40 +102,46 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException('User not found');
 
-    const [directTeam, totalTeam, withdrawalRow, stakeRoiRow, dirCommRow, lvlCommRow] =
-      await Promise.all([
-        this.usersRepo.count({ where: { referredById: userId } }),
-        this.countTotalDownline(userId),
-        this.withdrawalsRepo
-          .createQueryBuilder('w')
-          .select('COALESCE(SUM(w.amount), 0)', 'sum')
-          .where('w.userId = :uid', { uid: userId })
-          .andWhere('w.status = :st', { st: 'APPROVED' })
-          .getRawOne<{ sum: string }>(),
-        this.txRepo
-          .createQueryBuilder('t')
-          .select('COALESCE(SUM(t.amount), 0)', 'sum')
-          .where('t.userId = :uid', { uid: userId })
-          .andWhere('t.type = :ty', { ty: 'STAKE_ROI' })
-          .andWhere('t.status = :st', { st: 'APPROVED' })
-          .getRawOne<{ sum: string }>(),
-        this.txRepo
-          .createQueryBuilder('t')
-          .select('COALESCE(SUM(t.amount), 0)', 'sum')
-          .where('t.userId = :uid', { uid: userId })
-          .andWhere('t.type = :ty', { ty: 'COMMISSION' })
-          .andWhere('t.status = :st', { st: 'APPROVED' })
-          .andWhere('t.level = :lv', { lv: 1 })
-          .getRawOne<{ sum: string }>(),
-        this.txRepo
-          .createQueryBuilder('t')
-          .select('COALESCE(SUM(t.amount), 0)', 'sum')
-          .where('t.userId = :uid', { uid: userId })
-          .andWhere('t.type = :ty', { ty: 'COMMISSION' })
-          .andWhere('t.status = :st', { st: 'APPROVED' })
-          .andWhere('t.level > 1')
-          .getRawOne<{ sum: string }>(),
-      ]);
+    const [
+      directTeam,
+      totalTeam,
+      withdrawalRow,
+      stakeRoiRow,
+      dirCommRow,
+      lvlCommRow,
+    ] = await Promise.all([
+      this.usersRepo.count({ where: { referredById: userId } }),
+      this.countTotalDownline(userId),
+      this.withdrawalsRepo
+        .createQueryBuilder('w')
+        .select('COALESCE(SUM(w.amount), 0)', 'sum')
+        .where('w.userId = :uid', { uid: userId })
+        .andWhere('w.status = :st', { st: 'APPROVED' })
+        .getRawOne<{ sum: string }>(),
+      this.txRepo
+        .createQueryBuilder('t')
+        .select('COALESCE(SUM(t.amount), 0)', 'sum')
+        .where('t.userId = :uid', { uid: userId })
+        .andWhere('t.type = :ty', { ty: 'STAKE_ROI' })
+        .andWhere('t.status = :st', { st: 'APPROVED' })
+        .getRawOne<{ sum: string }>(),
+      this.txRepo
+        .createQueryBuilder('t')
+        .select('COALESCE(SUM(t.amount), 0)', 'sum')
+        .where('t.userId = :uid', { uid: userId })
+        .andWhere('t.type = :ty', { ty: 'COMMISSION' })
+        .andWhere('t.status = :st', { st: 'APPROVED' })
+        .andWhere('t.level = :lv', { lv: 1 })
+        .getRawOne<{ sum: string }>(),
+      this.txRepo
+        .createQueryBuilder('t')
+        .select('COALESCE(SUM(t.amount), 0)', 'sum')
+        .where('t.userId = :uid', { uid: userId })
+        .andWhere('t.type = :ty', { ty: 'COMMISSION' })
+        .andWhere('t.status = :st', { st: 'APPROVED' })
+        .andWhere('t.level > 1')
+        .getRawOne<{ sum: string }>(),
+    ]);
 
     const stakingIncome = parseFloat(stakeRoiRow?.sum ?? '0');
     const directIncome = parseFloat(dirCommRow?.sum ?? '0');
@@ -208,7 +227,15 @@ export class UsersService {
 
   sanitize(user: User) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { passwordHash, ...safe } = user;
+    const { passwordHash, withdrawPasswordHash, ...safe } = user;
     return safe;
+  }
+
+  async setWithdrawPassword(userId: string, password: string) {
+    const user = await this.findOrFail(userId);
+    const hash = await bcrypt.hash(password, 12);
+    user.withdrawPasswordHash = hash;
+    await this.usersRepo.save(user);
+    return { message: 'Withdrawal password set successfully' };
   }
 }

@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
   typeof value === 'string' && value.trim() === '' ? undefined : value;
@@ -21,21 +28,24 @@ export class RegisterUserDto {
 
   @ApiPropertyOptional({
     example: '+923001234567',
-    description: 'Mobile number (optional). Max 14 digits (optionally starts with +).',
+    description:
+      'Mobile number (optional). Max 14 digits (optionally starts with +).',
   })
   @IsOptional()
   @Transform(emptyToUndefined)
   @IsString()
   @MaxLength(14)
   @Matches(/^\+?[0-9]{1,14}$/, {
-    message: 'Mobile must be digits (optionally starting with +) with max 14 characters',
+    message:
+      'Mobile must be digits (optionally starting with +) with max 14 characters',
   })
   mobile?: string;
 
   @ApiProperty({
     minLength: 8,
     maxLength: 8,
-    description: 'Password length must be exactly 8 characters (min/max = 8). Any characters allowed.',
+    description:
+      'Password length must be exactly 8 characters (min/max = 8). Any characters allowed.',
   })
   @IsString()
   @MinLength(8)

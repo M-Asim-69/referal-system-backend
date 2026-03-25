@@ -16,6 +16,7 @@ import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { CreateStakeDto } from './dto/create-stake.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { FilesService } from '../files/files.service';
+import bcrypt from 'bcryptjs';
 import {
   APP_CURRENCY,
   COMMISSION_LEVELS,
@@ -79,7 +80,9 @@ export class WalletService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.status !== 'ACTIVE') {
-      throw new BadRequestException('Your account must be active to make deposits');
+      throw new BadRequestException(
+        'Your account must be active to make deposits',
+      );
     }
 
     const pendingDeposit = await this.depositsRepo.findOne({
@@ -96,7 +99,9 @@ export class WalletService {
       throw new BadRequestException(`Minimum deposit is $${MIN_DEPOSIT}`);
     }
     if (!file?.buffer?.length) {
-      throw new BadRequestException('Payment proof screenshot is required (field name: screenshot)');
+      throw new BadRequestException(
+        'Payment proof screenshot is required (field name: screenshot)',
+      );
     }
 
     const upload = await this.filesService.uploadImage(file, 'deposits');
@@ -113,7 +118,8 @@ export class WalletService {
     );
 
     return {
-      message: 'Deposit request submitted. Please wait up to 24 hours for admin approval.',
+      message:
+        'Deposit request submitted. Please wait up to 24 hours for admin approval.',
       data: deposit,
     };
   }
@@ -142,7 +148,22 @@ export class WalletService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.status !== 'ACTIVE') {
-      throw new BadRequestException('Your account must be active to make withdrawals');
+      throw new BadRequestException(
+        'Your account must be active to make withdrawals',
+      );
+    }
+
+    if (!user.withdrawPasswordHash) {
+      throw new BadRequestException(
+        'Please set your withdrawal password in Settings first.',
+      );
+    }
+    const passwordOk = await bcrypt.compare(
+      dto.password,
+      user.withdrawPasswordHash,
+    );
+    if (!passwordOk) {
+      throw new BadRequestException('Invalid withdrawal password.');
     }
 
     if (dto.amount < MIN_WITHDRAWAL) {
@@ -259,7 +280,9 @@ export class WalletService {
     const stake = await this.stakesRepo.findOne({ where: { id: stakeId } });
     if (!stake) throw new NotFoundException('Stake request not found');
     if (stake.status !== 'PENDING') {
-      throw new BadRequestException(`Stake is already ${stake.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Stake is already ${stake.status.toLowerCase()}`,
+      );
     }
 
     const user = await this.usersRepo.findOne({ where: { id: stake.userId } });
@@ -275,8 +298,18 @@ export class WalletService {
 
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Stake, stakeId, { status: 'APPROVED' });
-      await manager.decrement(User, { id: stake.userId }, 'walletBalance', amount);
-      await manager.increment(User, { id: stake.userId }, 'stakedBalance', amount);
+      await manager.decrement(
+        User,
+        { id: stake.userId },
+        'walletBalance',
+        amount,
+      );
+      await manager.increment(
+        User,
+        { id: stake.userId },
+        'stakedBalance',
+        amount,
+      );
       await manager.save(WalletTransaction, {
         userId: stake.userId,
         type: 'STAKE',
@@ -292,7 +325,9 @@ export class WalletService {
     const stake = await this.stakesRepo.findOne({ where: { id: stakeId } });
     if (!stake) throw new NotFoundException('Stake request not found');
     if (stake.status !== 'PENDING') {
-      throw new BadRequestException(`Stake is already ${stake.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Stake is already ${stake.status.toLowerCase()}`,
+      );
     }
     await this.stakesRepo.update(stakeId, { status: 'REJECTED' });
   }
@@ -314,18 +349,32 @@ export class WalletService {
   }
 
   async approveDeposit(depositId: string): Promise<void> {
-    const deposit = await this.depositsRepo.findOne({ where: { id: depositId } });
+    const deposit = await this.depositsRepo.findOne({
+      where: { id: depositId },
+    });
     if (!deposit) throw new NotFoundException('Deposit not found');
     if (deposit.status !== 'PENDING') {
-      throw new BadRequestException(`Deposit is already ${deposit.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Deposit is already ${deposit.status.toLowerCase()}`,
+      );
     }
 
     const amount = parseFloat(deposit.amount);
 
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Deposit, depositId, { status: 'APPROVED' });
-      await manager.increment(User, { id: deposit.userId }, 'walletBalance', amount);
-      await manager.increment(User, { id: deposit.userId }, 'totalDepositInvestment', amount);
+      await manager.increment(
+        User,
+        { id: deposit.userId },
+        'walletBalance',
+        amount,
+      );
+      await manager.increment(
+        User,
+        { id: deposit.userId },
+        'totalDepositInvestment',
+        amount,
+      );
       await manager.save(WalletTransaction, {
         userId: deposit.userId,
         type: 'DEPOSIT',
@@ -340,33 +389,50 @@ export class WalletService {
   }
 
   async rejectDeposit(depositId: string): Promise<void> {
-    const deposit = await this.depositsRepo.findOne({ where: { id: depositId } });
+    const deposit = await this.depositsRepo.findOne({
+      where: { id: depositId },
+    });
     if (!deposit) throw new NotFoundException('Deposit not found');
     if (deposit.status !== 'PENDING') {
-      throw new BadRequestException(`Deposit is already ${deposit.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Deposit is already ${deposit.status.toLowerCase()}`,
+      );
     }
     await this.depositsRepo.update(depositId, { status: 'REJECTED' });
   }
 
   async approveWithdrawal(withdrawalId: string): Promise<void> {
-    const withdrawal = await this.withdrawalsRepo.findOne({ where: { id: withdrawalId } });
+    const withdrawal = await this.withdrawalsRepo.findOne({
+      where: { id: withdrawalId },
+    });
     if (!withdrawal) throw new NotFoundException('Withdrawal not found');
     if (withdrawal.status !== 'PENDING') {
-      throw new BadRequestException(`Withdrawal is already ${withdrawal.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Withdrawal is already ${withdrawal.status.toLowerCase()}`,
+      );
     }
 
-    const user = await this.usersRepo.findOne({ where: { id: withdrawal.userId } });
+    const user = await this.usersRepo.findOne({
+      where: { id: withdrawal.userId },
+    });
     if (!user) throw new NotFoundException('User not found');
 
     const balance = parseFloat(user.walletBalance);
     const amount = parseFloat(withdrawal.amount);
     if (amount > balance) {
-      throw new BadRequestException('User has insufficient balance for this withdrawal');
+      throw new BadRequestException(
+        'User has insufficient balance for this withdrawal',
+      );
     }
 
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Withdrawal, withdrawalId, { status: 'APPROVED' });
-      await manager.decrement(User, { id: withdrawal.userId }, 'walletBalance', amount);
+      await manager.decrement(
+        User,
+        { id: withdrawal.userId },
+        'walletBalance',
+        amount,
+      );
       await manager.save(WalletTransaction, {
         userId: withdrawal.userId,
         type: 'WITHDRAWAL',
@@ -379,10 +445,14 @@ export class WalletService {
   }
 
   async rejectWithdrawal(withdrawalId: string): Promise<void> {
-    const withdrawal = await this.withdrawalsRepo.findOne({ where: { id: withdrawalId } });
+    const withdrawal = await this.withdrawalsRepo.findOne({
+      where: { id: withdrawalId },
+    });
     if (!withdrawal) throw new NotFoundException('Withdrawal not found');
     if (withdrawal.status !== 'PENDING') {
-      throw new BadRequestException(`Withdrawal is already ${withdrawal.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Withdrawal is already ${withdrawal.status.toLowerCase()}`,
+      );
     }
     await this.withdrawalsRepo.update(withdrawalId, { status: 'REJECTED' });
   }
@@ -390,7 +460,10 @@ export class WalletService {
   /**
    * Level income 10,5,3,2,1%. Only referrers who have at least one approved deposit receive commission.
    */
-  async distributeCommissions(userId: string, depositAmount: number): Promise<void> {
+  async distributeCommissions(
+    userId: string,
+    depositAmount: number,
+  ): Promise<void> {
     let currentUserId = userId;
 
     for (const { level, rate, label } of COMMISSION_LEVELS) {
@@ -417,7 +490,12 @@ export class WalletService {
       }
 
       await this.dataSource.transaction(async (manager) => {
-        await manager.increment(User, { id: referrer.id }, 'walletBalance', commission);
+        await manager.increment(
+          User,
+          { id: referrer.id },
+          'walletBalance',
+          commission,
+        );
         await manager.save(WalletTransaction, {
           userId: referrer.id,
           type: 'COMMISSION',
@@ -456,7 +534,11 @@ export class WalletService {
 
       await this.dataSource.transaction(async (manager) => {
         await manager.increment(User, { id: u.id }, 'walletBalance', roiAmount);
-        await manager.update(User, { id: u.id }, { lastStakeRoiAt: new Date() });
+        await manager.update(
+          User,
+          { id: u.id },
+          { lastStakeRoiAt: new Date() },
+        );
         await manager.save(WalletTransaction, {
           userId: u.id,
           type: 'STAKE_ROI',

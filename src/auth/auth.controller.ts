@@ -36,7 +36,9 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FileInterceptor('profilePhoto', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profilePhoto', { storage: memoryStorage() }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Register user (multipart)',
@@ -54,13 +56,26 @@ export class AuthController {
         fullName: { type: 'string', example: 'John Doe' },
         mobile: { type: 'string', example: '03001234567' },
         referralCode: { type: 'string' },
-        profilePhoto: { type: 'string', format: 'binary', description: 'Optional profile image' },
+        profilePhoto: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional profile image',
+        },
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'User created; can login and deposit' })
-  @ApiResponse({ status: 400, description: 'Validation error or invalid referral code' })
-  @ApiResponse({ status: 409, description: 'Email or username already registered' })
+  @ApiResponse({
+    status: 201,
+    description: 'User created; can login and deposit',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error or invalid referral code',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Email or username already registered',
+  })
   register(
     @Body() dto: RegisterUserDto,
     @UploadedFile() profilePhoto: Express.Multer.File | undefined,
@@ -71,7 +86,9 @@ export class AuthController {
   @Public()
   @Post('register-admin')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FileInterceptor('profilePhoto', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profilePhoto', { storage: memoryStorage() }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiHeader({
     name: 'x-admin-register-secret',
@@ -97,12 +114,19 @@ Fields: email, password; optional fullName, profilePhoto.
         email: { type: 'string' },
         password: { type: 'string' },
         fullName: { type: 'string' },
-        profilePhoto: { type: 'string', format: 'binary', description: 'Optional profile image' },
+        profilePhoto: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional profile image',
+        },
       },
     },
   })
   @ApiResponse({ status: 201, description: 'Admin user created' })
-  @ApiResponse({ status: 403, description: 'Invalid or missing admin registration secret' })
+  @ApiResponse({
+    status: 403,
+    description: 'Invalid or missing admin registration secret',
+  })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   registerAdmin(
     @Body() dto: RegisterAdminDto,
@@ -115,20 +139,32 @@ Fields: email, password; optional fullName, profilePhoto.
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login', description: 'Email + password. Returns JWT for protected routes. REJECTED accounts cannot login.' })
+  @ApiOperation({
+    summary: 'Login',
+    description:
+      'Email + password. Returns JWT for protected routes. REJECTED accounts cannot login.',
+  })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: 200,
-    description: 'accessToken, referralCode (top-level + inside user), and user payload',
+    description:
+      'accessToken, referralCode (top-level + inside user), and user payload',
   })
-  @ApiResponse({ status: 401, description: 'Invalid credentials or rejected account' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or rejected account',
+  })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
   @Get('me')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Current user profile', description: 'Returns user with referralCode, username, email, fullName, mobile, walletBalance (USD).' })
+  @ApiOperation({
+    summary: 'Current user profile',
+    description:
+      'Returns user with referralCode, username, email, fullName, mobile, walletBalance (USD).',
+  })
   @ApiResponse({ status: 200, description: 'User (no passwordHash)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getMe(@CurrentUser() user: User) {

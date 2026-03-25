@@ -31,6 +31,8 @@ export class SeedAdmin1710000000002 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DELETE FROM "users" WHERE "email" = 'admin@platform.com';`);
+    await queryRunner.query(
+      `DELETE FROM "users" WHERE "email" = 'admin@platform.com';`,
+    );
   }
 }

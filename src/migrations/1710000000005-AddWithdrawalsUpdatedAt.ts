@@ -19,4 +19,3 @@ export class AddWithdrawalsUpdatedAt1710000000005 implements MigrationInterface 
     `);
   }
 }
-

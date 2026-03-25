@@ -83,7 +83,6 @@ export const CloudinaryProvider: Provider = {
 
     // URL tabhi jab teen vars na hon — warna sirf 3 vars use hongi (mismatch avoid)
     if (!cloudName && !apiKey && !apiSecret && !cloudinaryUrl) {
-      // eslint-disable-next-line no-console
       console.warn(
         '[Cloudinary] Env empty — using fallback URL from cloudinary.fallback.ts',
       );

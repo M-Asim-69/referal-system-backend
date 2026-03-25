@@ -11,7 +11,13 @@ import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Deposit, Withdrawal, Stake, WalletTransaction]),
+    TypeOrmModule.forFeature([
+      User,
+      Deposit,
+      Withdrawal,
+      Stake,
+      WalletTransaction,
+    ]),
     WalletModule,
   ],
   controllers: [AdminController],
