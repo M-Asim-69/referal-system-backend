@@ -1,6 +1,8 @@
 export default () => ({
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
+  /** Set RUN_MIGRATIONS_ON_START=false to skip (e.g. local debugging). Default: run pending migrations on boot. */
+  runMigrationsOnStart: process.env.RUN_MIGRATIONS_ON_START ?? 'true',
   database: {
     url: process.env.DATABASE_URL || '',
   },
