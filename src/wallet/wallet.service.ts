@@ -16,7 +16,6 @@ import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { CreateStakeDto } from './dto/create-stake.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { FilesService } from '../files/files.service';
-import bcrypt from 'bcryptjs';
 import {
   APP_CURRENCY,
   COMMISSION_LEVELS,
@@ -153,19 +152,6 @@ export class WalletService {
       );
     }
 
-    if (!user.withdrawPasswordHash) {
-      throw new BadRequestException(
-        'Please set your withdrawal password in Settings first.',
-      );
-    }
-    const passwordOk = await bcrypt.compare(
-      dto.password,
-      user.withdrawPasswordHash,
-    );
-    if (!passwordOk) {
-      throw new BadRequestException('Invalid withdrawal password.');
-    }
-
     if (dto.amount < MIN_WITHDRAWAL) {
       throw new BadRequestException(`Minimum withdrawal is $${MIN_WITHDRAWAL}`);
     }
@@ -235,27 +221,32 @@ export class WalletService {
       );
     }
 
-    const pending = await this.stakesRepo.findOne({
-      where: { userId, status: 'PENDING' },
-      order: { createdAt: 'DESC' },
-    });
-    if (pending) {
-      throw new BadRequestException(
-        'You already have a pending stake request. Wait for admin approval or rejection before submitting another.',
+    const amount = dto.amount;
+    const stake = await this.dataSource.transaction(async (manager) => {
+      const createdStake = await manager.save(
+        Stake,
+        this.stakesRepo.create({
+          userId,
+          amount: amount.toString(),
+          status: 'APPROVED',
+        }),
       );
-    }
-
-    const stake = await this.stakesRepo.save(
-      this.stakesRepo.create({
+      await manager.decrement(User, { id: userId }, 'walletBalance', amount);
+      await manager.increment(User, { id: userId }, 'stakedBalance', amount);
+      await manager.save(WalletTransaction, {
         userId,
-        amount: dto.amount.toString(),
-        status: 'PENDING',
-      }),
-    );
+        type: 'STAKE',
+        status: 'APPROVED',
+        amount: amount.toString(),
+        referenceId: createdStake.id,
+        note: 'Stake applied instantly — moved from wallet to staked balance',
+      });
+      return createdStake;
+    });
 
     return {
       message:
-        'Stake request submitted. Admin will review; once approved, funds move from wallet to staked balance and earn daily ROI.',
+        'Stake applied successfully. Funds moved from wallet to staked balance and now earn daily ROI.',
       data: stake,
     };
   }

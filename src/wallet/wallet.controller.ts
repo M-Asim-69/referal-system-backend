@@ -117,10 +117,9 @@ export class WalletController {
       type: 'object',
       properties: {
         amount: { type: 'number', format: 'float', example: 3 },
-        password: { type: 'string', example: 'MySecurePass123' },
         screenshot: { type: 'string', format: 'binary' },
       },
-      required: ['amount', 'password', 'screenshot'],
+      required: ['amount', 'screenshot'],
     },
   })
   @ApiResponse({
@@ -155,16 +154,16 @@ export class WalletController {
   @ApiOperation({
     summary: 'Request stake (from wallet / deposited funds)',
     description:
-      'JSON body: amount (min $5). Requires at least one approved deposit and enough wallet balance. One pending stake at a time. Admin approves → amount moves wallet → stakedBalance; daily 2% ROI on stakedBalance.',
+      'JSON body: amount (min $5). Requires at least one approved deposit and enough wallet balance. Stake is applied instantly: amount moves wallet -> stakedBalance immediately; daily 2% ROI on stakedBalance.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Stake request created; pending admin',
+    description: 'Stake created and applied immediately',
   })
   @ApiResponse({
     status: 400,
     description:
-      'Validation, no deposit, insufficient balance, or pending stake exists',
+      'Validation, no approved deposit, or insufficient wallet balance',
   })
   createStake(@CurrentUser() user: User, @Body() dto: CreateStakeDto) {
     return this.walletService.createStakeRequest(user.id, dto);

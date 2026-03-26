@@ -5,7 +5,7 @@ import { MIN_STAKE } from '../../common/constants/commission.constants';
 export class CreateStakeDto {
   @ApiProperty({
     example: 10,
-    description: `Amount from wallet to lock as stake (min $${MIN_STAKE}). Admin must approve.`,
+    description: `Amount from wallet to lock as stake (min $${MIN_STAKE}). Applied instantly without admin approval.`,
   })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(MIN_STAKE, { message: `Minimum stake is $${MIN_STAKE}` })
