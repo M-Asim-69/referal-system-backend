@@ -75,7 +75,7 @@ export class UsersController {
     summary:
       'Dashboard stats (wallet, team, deposits, withdrawals, income breakdown)',
     description:
-      'Single payload for home dashboard: balances, referralCode, direct/total team counts, deposit & withdrawal totals, and income split (direct level-1 commission, levels 2–5, staking ROI).',
+      'Single payload for home dashboard: balances, referralCode, direct/total team counts, totalTeamBusiness, deposit & withdrawal totals, and income split (direct level-1 commission, levels 2–5, staking ROI).',
   })
   @ApiResponse({
     status: 200,

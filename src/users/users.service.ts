@@ -21,6 +21,7 @@ export interface UserDashboardStats {
   referralCode: string;
   directTeam: number;
   totalTeam: number;
+  totalTeamBusiness: number;
   depositAmount: number;
   withdrawalAmount: number;
   directIncome: number;
@@ -105,6 +106,7 @@ export class UsersService {
     const [
       directTeam,
       totalTeam,
+      totalTeamBusiness,
       withdrawalRow,
       stakeRoiRow,
       dirCommRow,
@@ -112,6 +114,7 @@ export class UsersService {
     ] = await Promise.all([
       this.usersRepo.count({ where: { referredById: userId } }),
       this.countTotalDownline(userId),
+      this.getTotalTeamBusiness(userId),
       this.withdrawalsRepo
         .createQueryBuilder('w')
         .select('COALESCE(SUM(w.amount), 0)', 'sum')
@@ -158,6 +161,7 @@ export class UsersService {
         referralCode: user.referralCode,
         directTeam,
         totalTeam,
+        totalTeamBusiness,
         depositAmount: parseFloat(user.totalDepositInvestment),
         withdrawalAmount,
         directIncome,
@@ -184,6 +188,28 @@ export class UsersService {
     );
     const n = rows[0]?.cnt;
     return typeof n === 'number' ? n : parseInt(String(n ?? 0), 10) || 0;
+  }
+
+  /** Sum of APPROVED deposits made by all descendants in referral tree. */
+  private async getTotalTeamBusiness(rootUserId: string): Promise<number> {
+    const rows = await this.usersRepo.query(
+      `
+      WITH RECURSIVE downline AS (
+        SELECT id FROM users WHERE "referredById" = $1
+        UNION ALL
+        SELECT u.id FROM users u
+        INNER JOIN downline d ON u."referredById" = d.id
+      )
+      SELECT COALESCE(SUM(d.amount), 0)::numeric AS total
+      FROM deposits d
+      INNER JOIN downline dl ON dl.id = d."userId"
+      WHERE d.status = 'APPROVED'
+      `,
+      [rootUserId],
+    );
+
+    const total = rows[0]?.total;
+    return parseFloat(String(total ?? 0));
   }
 
   async getReferrals(userId: string, pagination: PaginationDto) {
