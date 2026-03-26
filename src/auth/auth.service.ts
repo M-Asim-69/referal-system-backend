@@ -184,9 +184,31 @@ export class AuthService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
     const withReferral = await this.ensureReferralCode(user);
+
+    // If the user signed up using someone else's referral code,
+    // return that referrer's name.
+    let referredBy: { id: string; username: string; fullName: string } | null =
+      null;
+    if (withReferral.referredById) {
+      const referrer = await this.usersRepo.findOne({
+        where: { id: withReferral.referredById },
+        select: ['id', 'username', 'fullName'],
+      });
+      if (referrer) {
+        referredBy = {
+          id: referrer.id,
+          username: referrer.username,
+          fullName: referrer.fullName,
+        };
+      }
+    }
+
     return {
       message: 'Profile fetched',
-      data: this.sanitizeUser(withReferral),
+      data: {
+        ...this.sanitizeUser(withReferral),
+        referredBy,
+      },
     };
   }
 

@@ -163,7 +163,7 @@ Fields: email, password; optional fullName, profilePhoto.
   @ApiOperation({
     summary: 'Current user profile',
     description:
-      'Returns user with referralCode, username, email, fullName, mobile, walletBalance (USD).',
+      'Returns user with referralCode, username, email, fullName, mobile, walletBalance (USD). Also returns `referredBy` (referrer name) if the user signed up with a referral code.',
   })
   @ApiResponse({ status: 200, description: 'User (no passwordHash)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
