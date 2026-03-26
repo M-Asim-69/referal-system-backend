@@ -45,11 +45,15 @@ export class WalletService {
   async getBalance(userId: string) {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
+    const balance = parseFloat(user.walletBalance);
+    const stakedBalance = parseFloat(user.stakedBalance ?? '0');
+    const withdrawableAmount = parseFloat((balance + stakedBalance).toFixed(2));
     return {
       message: 'Wallet balance fetched',
       data: {
-        balance: parseFloat(user.walletBalance),
-        stakedBalance: parseFloat(user.stakedBalance ?? '0'),
+        balance,
+        stakedBalance,
+        withdrawableAmount,
         currency: APP_CURRENCY,
       },
     };
@@ -155,10 +159,14 @@ export class WalletService {
     if (dto.amount < MIN_WITHDRAWAL) {
       throw new BadRequestException(`Minimum withdrawal is $${MIN_WITHDRAWAL}`);
     }
-    const balance = parseFloat(user.walletBalance);
-    if (dto.amount > balance) {
+    const walletBalance = parseFloat(user.walletBalance);
+    const stakedBalance = parseFloat(user.stakedBalance ?? '0');
+    const withdrawableAmount = parseFloat(
+      (walletBalance + stakedBalance).toFixed(2),
+    );
+    if (dto.amount > withdrawableAmount) {
       throw new BadRequestException(
-        `Insufficient balance. Available: ${balance}, Requested: ${dto.amount}`,
+        `Insufficient balance. Withdrawable: ${withdrawableAmount}, Requested: ${dto.amount}`,
       );
     }
 
@@ -408,29 +416,44 @@ export class WalletService {
     });
     if (!user) throw new NotFoundException('User not found');
 
-    const balance = parseFloat(user.walletBalance);
+    const walletBalance = parseFloat(user.walletBalance);
+    const stakedBalance = parseFloat(user.stakedBalance ?? '0');
+    const totalWithdrawable = parseFloat((walletBalance + stakedBalance).toFixed(2));
     const amount = parseFloat(withdrawal.amount);
-    if (amount > balance) {
+    if (amount > totalWithdrawable) {
       throw new BadRequestException(
         'User has insufficient balance for this withdrawal',
       );
     }
 
+    const walletDebit = Math.min(walletBalance, amount);
+    const stakedDebit = parseFloat((amount - walletDebit).toFixed(2));
+
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Withdrawal, withdrawalId, { status: 'APPROVED' });
-      await manager.decrement(
-        User,
-        { id: withdrawal.userId },
-        'walletBalance',
-        amount,
-      );
+      if (walletDebit > 0) {
+        await manager.decrement(
+          User,
+          { id: withdrawal.userId },
+          'walletBalance',
+          walletDebit,
+        );
+      }
+      if (stakedDebit > 0) {
+        await manager.decrement(
+          User,
+          { id: withdrawal.userId },
+          'stakedBalance',
+          stakedDebit,
+        );
+      }
       await manager.save(WalletTransaction, {
         userId: withdrawal.userId,
         type: 'WITHDRAWAL',
         status: 'APPROVED',
         amount: withdrawal.amount,
         referenceId: withdrawalId,
-        note: `Withdrawal approved`,
+        note: `Withdrawal approved (wallet: ${walletDebit.toFixed(2)}, staked: ${stakedDebit.toFixed(2)})`,
       });
     });
   }

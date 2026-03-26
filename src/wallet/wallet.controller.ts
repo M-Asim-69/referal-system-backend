@@ -37,11 +37,11 @@ export class WalletController {
   @ApiOperation({
     summary: 'Get my wallet balance',
     description:
-      'Liquid wallet balance + staked balance (locked until unstake feature; earns daily stake ROI when > 0).',
+      'Returns wallet balance, staked balance, and total withdrawable amount (wallet + staked).',
   })
   @ApiResponse({
     status: 200,
-    description: 'balance, stakedBalance, currency (USD)',
+    description: 'balance, stakedBalance, withdrawableAmount, currency (USD)',
   })
   getBalance(@CurrentUser() user: User) {
     return this.walletService.getBalance(user.id);
@@ -110,7 +110,7 @@ export class WalletController {
   @ApiOperation({
     summary: 'Submit withdrawal (min $3 + proof)',
     description:
-      'Same pattern as deposit: amount ≥ 3 (USD) + screenshot (field name: screenshot). Admin approves/rejects. Only one pending withdrawal at a time.',
+      'Same pattern as deposit: amount ≥ 3 (USD) + screenshot (field name: screenshot). User can withdraw from total funds (wallet + staked). Admin approves/rejects. Only one pending withdrawal at a time.',
   })
   @ApiBody({
     schema: {

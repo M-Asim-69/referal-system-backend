@@ -38,6 +38,8 @@ export class AdminService {
       pendingWithdrawals,
       totalStakes,
       pendingStakes,
+      totalAmountReceivedFromUsersRaw,
+      totalAmountSentToUsersRaw,
     ] = await Promise.all([
       this.usersRepo.count({ where: { role: 'USER' } }),
       this.usersRepo.count({ where: { role: 'USER', status: 'ACTIVE' } }),
@@ -48,7 +50,24 @@ export class AdminService {
       this.withdrawalsRepo.count({ where: { status: 'PENDING' } }),
       this.stakesRepo.count(),
       this.stakesRepo.count({ where: { status: 'PENDING' } }),
+      this.depositsRepo
+        .createQueryBuilder('deposit')
+        .select('COALESCE(SUM(deposit.amount), 0)', 'total')
+        .where('deposit.status = :status', { status: 'APPROVED' })
+        .getRawOne<{ total: string }>(),
+      this.withdrawalsRepo
+        .createQueryBuilder('withdrawal')
+        .select('COALESCE(SUM(withdrawal.amount), 0)', 'total')
+        .where('withdrawal.status = :status', { status: 'APPROVED' })
+        .getRawOne<{ total: string }>(),
     ]);
+
+    const totalAmountReceivedFromUsers = parseFloat(
+      totalAmountReceivedFromUsersRaw?.total ?? '0',
+    );
+    const totalAmountSentToUsers = parseFloat(
+      totalAmountSentToUsersRaw?.total ?? '0',
+    );
 
     return {
       message: 'Dashboard stats fetched',
@@ -58,8 +77,16 @@ export class AdminService {
           active: activeUsers,
           pending: pendingUsers,
         },
-        deposits: { total: totalDeposits, pending: pendingDeposits },
-        withdrawals: { total: totalWithdrawals, pending: pendingWithdrawals },
+        deposits: {
+          total: totalDeposits,
+          pending: pendingDeposits,
+          totalAmountReceivedFromUsers,
+        },
+        withdrawals: {
+          total: totalWithdrawals,
+          pending: pendingWithdrawals,
+          totalAmountSentToUsers,
+        },
         stakes: { total: totalStakes, pending: pendingStakes },
       },
     };
