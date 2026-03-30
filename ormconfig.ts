@@ -4,15 +4,19 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const url = process.env.DATABASE_URL || '';
-const isRemote = !url.includes('localhost');
+const dbType = (process.env.DB_TYPE || 'mysql') as 'mysql' | 'postgres';
 
 const AppDataSource = new DataSource({
-  type: 'postgres',
+  type: dbType,
   url,
   entities: ['src/**/*.entity.ts'],
-  migrations: ['src/migrations/*.ts'],
+  migrations: ['src/migrations/[0-9]*-*.ts'],
   synchronize: false,
-  ssl: isRemote ? { rejectUnauthorized: false } : false,
+  ...(dbType === 'postgres'
+    ? {
+        ssl: !url.includes('localhost') ? { rejectUnauthorized: false } : false,
+      }
+    : {}),
 });
 
 export default AppDataSource;

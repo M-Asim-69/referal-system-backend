@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -40,6 +40,7 @@ export class UsersService {
     @InjectRepository(Withdrawal)
     private readonly withdrawalsRepo: Repository<Withdrawal>,
     private readonly filesService: FilesService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getProfile(userId: string) {
@@ -174,8 +175,19 @@ export class UsersService {
 
   /** All descendants in referral tree (excludes self; not only direct). */
   private async countTotalDownline(rootUserId: string): Promise<number> {
+    const isMysql = this.dataSource.options.type === 'mysql';
     const rows = await this.usersRepo.query(
+      isMysql
+        ? `
+      WITH RECURSIVE downline AS (
+        SELECT id FROM users WHERE referredById = ?
+        UNION ALL
+        SELECT u.id FROM users u
+        INNER JOIN downline d ON u.referredById = d.id
+      )
+      SELECT COUNT(*) AS cnt FROM downline
       `
+        : `
       WITH RECURSIVE downline AS (
         SELECT id FROM users WHERE "referredById" = $1
         UNION ALL
@@ -192,8 +204,22 @@ export class UsersService {
 
   /** Sum of APPROVED deposits made by all descendants in referral tree. */
   private async getTotalTeamBusiness(rootUserId: string): Promise<number> {
+    const isMysql = this.dataSource.options.type === 'mysql';
     const rows = await this.usersRepo.query(
+      isMysql
+        ? `
+      WITH RECURSIVE downline AS (
+        SELECT id FROM users WHERE referredById = ?
+        UNION ALL
+        SELECT u.id FROM users u
+        INNER JOIN downline d ON u.referredById = d.id
+      )
+      SELECT COALESCE(SUM(d.amount), 0) AS total
+      FROM deposits d
+      INNER JOIN downline dl ON dl.id = d.userId
+      WHERE d.status = 'APPROVED'
       `
+        : `
       WITH RECURSIVE downline AS (
         SELECT id FROM users WHERE "referredById" = $1
         UNION ALL

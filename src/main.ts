@@ -5,9 +5,6 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-
-
-
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -72,7 +69,7 @@ REST API for referral + investment platform. All amounts in **USD**.
 ## Stake
 - \`POST /api/v1/wallet/stakes\` — JSON \`{ "amount": number }\` (min $5). Requires approved deposit + wallet balance. **One pending** stake at a time.
 - Admin: \`GET /admin/stakes\`, \`PATCH /admin/stakes/:id/approve\` or \`reject\`. On approve: wallet → **stakedBalance** (locked).
-- **2% daily** profit only on \`stakedBalance\` (deposits do not earn daily ROI).
+- **1.6% ROI** profit only on \`stakedBalance\` (deposits do not earn daily ROI). Paid once per 24-hour interval from each stake time.
 
 ## Profile
 - \`PATCH /api/v1/users/profile\` — multipart: optional \`fullName\`, \`photo\`, payment fields.
@@ -82,7 +79,7 @@ Only referrers who have **at least one approved deposit** receive commission:
 - **Level 1:** 10% · Level 2: 5% · Level 3: 3% · Level 4: 2% · Level 5: 1% (total 21%).
 
 ## Daily profit
-- **2% daily** on \`stakedBalance\` only (admin-approved stakes). Credited once per day (UTC). \`totalDepositInvestment\` is for tracking / commissions, not daily ROI.
+- **1.6% ROI** on \`stakedBalance\` only (approved stakes). Paid once per 24-hour interval from each stake time. \`totalDepositInvestment\` is for tracking / commissions, not daily ROI.
 
 ## User stats (after login)
 - \`GET /api/v1/users/dashboard-stats\` — **one call** for UI: wallet, staked, \`referralCode\`, direct/total team size, deposit & withdrawal totals, \`totalIncome\` + \`directIncome\` / \`levelsIncome\` / \`stakingIncome\`.

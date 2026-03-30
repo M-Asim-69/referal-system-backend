@@ -10,8 +10,27 @@ export class SeedAdmin1710000000002 implements MigrationInterface {
   name = 'SeedAdmin1710000000002';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const isMysql = queryRunner.connection.options.type === 'mysql';
     const passwordHash = bcrypt.hashSync('Admin@123456', 12);
     const referralCode = randomBytes(4).toString('hex').toUpperCase();
+
+    if (isMysql) {
+      await queryRunner.query(`
+        INSERT IGNORE INTO \`users\` (
+          \`email\`, \`passwordHash\`, \`fullName\`, \`role\`,
+          \`status\`, \`referralCode\`, \`walletBalance\`
+        ) VALUES (
+          'admin@platform.com',
+          '${passwordHash}',
+          'System Administrator',
+          'ADMIN',
+          'ACTIVE',
+          '${referralCode}',
+          0
+        );
+      `);
+      return;
+    }
 
     await queryRunner.query(`
       INSERT INTO "users" (
@@ -31,8 +50,11 @@ export class SeedAdmin1710000000002 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    const isMysql = queryRunner.connection.options.type === 'mysql';
     await queryRunner.query(
-      `DELETE FROM "users" WHERE "email" = 'admin@platform.com';`,
+      isMysql
+        ? "DELETE FROM `users` WHERE `email` = 'admin@platform.com';"
+        : `DELETE FROM "users" WHERE "email" = 'admin@platform.com';`,
     );
   }
 }

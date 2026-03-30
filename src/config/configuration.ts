@@ -4,6 +4,7 @@ export default () => ({
   /** Set RUN_MIGRATIONS_ON_START=false to skip (e.g. local debugging). Default: run pending migrations on boot. */
   runMigrationsOnStart: process.env.RUN_MIGRATIONS_ON_START ?? 'true',
   database: {
+    type: process.env.DB_TYPE || 'mysql',
     url: process.env.DATABASE_URL || '',
   },
   jwt: {

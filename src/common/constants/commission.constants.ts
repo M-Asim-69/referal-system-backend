@@ -2,8 +2,8 @@ export const APP_CURRENCY = 'USD';
 export const MIN_DEPOSIT = 5;
 export const MIN_WITHDRAWAL = 3;
 export const MIN_STAKE = 5;
-/** Daily profit on **staked** balance only (deposits do not earn daily ROI). */
-export const STAKE_ROI_DAILY_RATE = 0.02;
+/** Daily profit on approved stake principal. */
+export const STAKE_ROI_DAILY_RATE = 0.016;
 
 export interface CommissionLevel {
   level: number;

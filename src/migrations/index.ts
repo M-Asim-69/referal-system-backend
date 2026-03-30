@@ -9,6 +9,7 @@ import { AddWithdrawalPaymentProofUrl1710000000006 } from './1710000000006-AddWi
 import { StakesAndUserStakedBalance1710000000007 } from './1710000000007-StakesAndUserStakedBalance';
 import { AddWithdrawPasswordHash1710000000008 } from './1710000000008-AddWithdrawPasswordHash';
 import { CreateIssues1710000000009 } from './1710000000009-CreateIssues';
+import { StakeRoiSchedulePerStake1710000000010 } from './1710000000010-StakeRoiSchedulePerStake';
 
 /** Ordered list for TypeORM (same order as timestamps). */
 export const appMigrations: (new () => MigrationInterface)[] = [
@@ -22,4 +23,5 @@ export const appMigrations: (new () => MigrationInterface)[] = [
   StakesAndUserStakedBalance1710000000007,
   AddWithdrawPasswordHash1710000000008,
   CreateIssues1710000000009,
+  StakeRoiSchedulePerStake1710000000010,
 ];

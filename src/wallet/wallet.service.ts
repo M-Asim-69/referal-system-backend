@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Deposit } from './deposit.entity';
 import { Withdrawal } from './withdrawal.entity';
@@ -24,6 +24,8 @@ import {
   MIN_WITHDRAWAL,
   STAKE_ROI_DAILY_RATE,
 } from '../common/constants/commission.constants';
+
+const ROI_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class WalletService {
@@ -236,7 +238,9 @@ export class WalletService {
         this.stakesRepo.create({
           userId,
           amount: amount.toString(),
+          remainingAmount: amount.toString(),
           status: 'APPROVED',
+          nextRoiAt: new Date(Date.now() + ROI_INTERVAL_MS),
         }),
       );
       await manager.decrement(User, { id: userId }, 'walletBalance', amount);
@@ -249,12 +253,19 @@ export class WalletService {
         referenceId: createdStake.id,
         note: 'Stake applied instantly — moved from wallet to staked balance',
       });
+      // Distribute referral commissions atomically inside the same transaction
+      await this.distributeCommissionsInManager(
+        manager,
+        userId,
+        createdStake.id,
+        amount,
+      );
       return createdStake;
     });
 
     return {
       message:
-        'Stake applied successfully. Funds moved from wallet to staked balance and now earn daily ROI.',
+        'Stake applied successfully. Funds moved from wallet to staked balance; first ROI is after 24 hours.',
       data: stake,
     };
   }
@@ -296,7 +307,11 @@ export class WalletService {
     }
 
     await this.dataSource.transaction(async (manager) => {
-      await manager.update(Stake, stakeId, { status: 'APPROVED' });
+      await manager.update(Stake, stakeId, {
+        status: 'APPROVED',
+        remainingAmount: stake.amount,
+        nextRoiAt: new Date(Date.now() + ROI_INTERVAL_MS),
+      });
       await manager.decrement(
         User,
         { id: stake.userId },
@@ -317,6 +332,13 @@ export class WalletService {
         referenceId: stakeId,
         note: 'Stake approved — moved from wallet to staked balance',
       });
+      // Distribute referral commissions atomically inside the same transaction
+      await this.distributeCommissionsInManager(
+        manager,
+        stake.userId,
+        stakeId,
+        amount,
+      );
     });
   }
 
@@ -383,8 +405,6 @@ export class WalletService {
         note: 'Deposit approved',
       });
     });
-
-    await this.distributeCommissions(deposit.userId, amount);
   }
 
   async rejectDeposit(depositId: string): Promise<void> {
@@ -418,7 +438,9 @@ export class WalletService {
 
     const walletBalance = parseFloat(user.walletBalance);
     const stakedBalance = parseFloat(user.stakedBalance ?? '0');
-    const totalWithdrawable = parseFloat((walletBalance + stakedBalance).toFixed(2));
+    const totalWithdrawable = parseFloat(
+      (walletBalance + stakedBalance).toFixed(2),
+    );
     const amount = parseFloat(withdrawal.amount);
     if (amount > totalWithdrawable) {
       throw new BadRequestException(
@@ -440,6 +462,11 @@ export class WalletService {
         );
       }
       if (stakedDebit > 0) {
+        await this.consumeStakedPrincipal(
+          manager,
+          withdrawal.userId,
+          stakedDebit,
+        );
         await manager.decrement(
           User,
           { id: withdrawal.userId },
@@ -472,97 +499,181 @@ export class WalletService {
   }
 
   /**
-   * Level income 10,5,3,2,1%. Only referrers who have at least one approved deposit receive commission.
+   * Distributes referral commissions up to 5 levels when a stake is approved.
+   *
+   * Rules:
+   * - Commission is triggered on STAKE, not on deposit.
+   * - Upline referrer must have at least one APPROVED deposit to receive commission.
+   * - If a level's referrer is ineligible, that level is skipped and traversal continues up.
+   * - Uses the open transaction (manager) so the entire stake + commission is one atomic unit.
+   * - Idempotent: if commission for this stakeId + level was already paid, it is skipped safely.
    */
-  async distributeCommissions(
-    userId: string,
-    depositAmount: number,
+  private async distributeCommissionsInManager(
+    manager: EntityManager,
+    stakerId: string,
+    stakeId: string,
+    stakeAmount: number,
   ): Promise<void> {
-    let currentUserId = userId;
+    let currentUserId = stakerId;
 
     for (const { level, rate, label } of COMMISSION_LEVELS) {
-      const currentUser = await this.usersRepo.findOne({
+      // Load current node in the upline chain
+      const currentUser = await manager.findOne(User, {
         where: { id: currentUserId },
         relations: ['referredBy'],
       });
 
+      // No referrer at this level — chain ends
       if (!currentUser?.referredBy) break;
 
       const referrer = currentUser.referredBy;
-      const referrerHasDeposit = await this.depositsRepo.findOne({
+
+      // Eligibility check: referrer must have made at least one approved deposit
+      const referrerHasDeposit = await manager.findOne(Deposit, {
         where: { userId: referrer.id, status: 'APPROVED' },
       });
       if (!referrerHasDeposit) {
+        // Skip ineligible level, keep walking up the chain
         currentUserId = referrer.id;
         continue;
       }
 
-      const commission = parseFloat((depositAmount * rate).toFixed(2));
+      const commission = parseFloat((stakeAmount * rate).toFixed(2));
       if (commission <= 0) {
         currentUserId = referrer.id;
         continue;
       }
 
-      await this.dataSource.transaction(async (manager) => {
-        await manager.increment(
-          User,
-          { id: referrer.id },
-          'walletBalance',
-          commission,
-        );
-        await manager.save(WalletTransaction, {
-          userId: referrer.id,
+      // Idempotency guard: skip if this exact stake+level was already credited
+      const alreadyPaid = await manager.findOne(WalletTransaction, {
+        where: {
           type: 'COMMISSION',
-          status: 'APPROVED',
-          amount: commission.toString(),
-          referenceId: userId,
+          referenceId: stakeId,
           level,
-          note: `${label} from referral deposit`,
-        });
+          userId: referrer.id,
+        },
+      });
+      if (alreadyPaid) {
+        currentUserId = referrer.id;
+        continue;
+      }
+
+      // Credit commission to referrer's wallet
+      await manager.increment(User, { id: referrer.id }, 'walletBalance', commission);
+      await manager.save(WalletTransaction, {
+        userId: referrer.id,
+        type: 'COMMISSION',
+        status: 'APPROVED',
+        amount: commission.toString(),
+        referenceId: stakeId,
+        level,
+        note: `${label} from referral stake`,
       });
 
       currentUserId = referrer.id;
     }
   }
 
-  /** Daily 2% profit on stakedBalance only (not on deposits). Runs 00:00 UTC. */
-  @Cron('0 0 * * *')
+  /** Processes stake ROI once each full 24-hour interval from each stake start time. */
+  @Cron('*/5 * * * *')
   async runDailyStakeRoi(): Promise<void> {
-    const startOfToday = new Date();
-    startOfToday.setUTCHours(0, 0, 0, 0);
+    const now = new Date();
+    const dueStakes = await this.stakesRepo
+      .createQueryBuilder('s')
+      .select(['s.id', 's.userId', 's.remainingAmount', 's.nextRoiAt'])
+      .where('s.status = :status', { status: 'APPROVED' })
+      .andWhere('CAST(s.remainingAmount AS DECIMAL(18,2)) > 0')
+      .andWhere('s.nextRoiAt IS NOT NULL')
+      .andWhere('s.nextRoiAt <= :now', { now })
+      .orderBy('s.nextRoiAt', 'ASC')
+      .getMany();
 
-    const users = await this.usersRepo.find({
-      where: {},
-      select: ['id', 'stakedBalance', 'lastStakeRoiAt', 'walletBalance'],
-    });
+    for (const stake of dueStakes) {
+      const principal = parseFloat(stake.remainingAmount ?? '0');
+      const nextRoiAt = stake.nextRoiAt ? new Date(stake.nextRoiAt) : null;
+      if (!nextRoiAt || principal <= 0) continue;
 
-    for (const u of users) {
-      const staked = parseFloat(u.stakedBalance ?? '0');
-      if (staked <= 0) continue;
+      const elapsedMs = now.getTime() - nextRoiAt.getTime();
+      const completedCycles = Math.floor(elapsedMs / ROI_INTERVAL_MS) + 1;
+      if (completedCycles <= 0) continue;
 
-      const last = u.lastStakeRoiAt ? new Date(u.lastStakeRoiAt) : null;
-      if (last && last >= startOfToday) continue;
-
-      const roiAmount = parseFloat((staked * STAKE_ROI_DAILY_RATE).toFixed(2));
+      const roiAmount = parseFloat(
+        (principal * STAKE_ROI_DAILY_RATE * completedCycles).toFixed(2),
+      );
       if (roiAmount <= 0) continue;
 
+      const nextPayoutAt = new Date(
+        nextRoiAt.getTime() + completedCycles * ROI_INTERVAL_MS,
+      );
+
       await this.dataSource.transaction(async (manager) => {
-        await manager.increment(User, { id: u.id }, 'walletBalance', roiAmount);
+        await manager.increment(
+          User,
+          { id: stake.userId },
+          'walletBalance',
+          roiAmount,
+        );
+        await manager.update(
+          Stake,
+          { id: stake.id },
+          {
+            nextRoiAt: nextPayoutAt,
+          },
+        );
         await manager.update(
           User,
-          { id: u.id },
-          { lastStakeRoiAt: new Date() },
+          { id: stake.userId },
+          { lastStakeRoiAt: now },
         );
         await manager.save(WalletTransaction, {
-          userId: u.id,
+          userId: stake.userId,
           type: 'STAKE_ROI',
           status: 'APPROVED',
           amount: roiAmount.toString(),
-          referenceId: null,
+          referenceId: stake.id,
           level: null,
-          note: 'Daily stake ROI (2%)',
+          note:
+            completedCycles === 1
+              ? 'Stake ROI credited (1.6% after 24 hours)'
+              : `Stake ROI catch-up credited for ${completedCycles} cycles`,
         });
       });
+    }
+  }
+
+  private async consumeStakedPrincipal(
+    manager: EntityManager,
+    userId: string,
+    amountToConsume: number,
+  ): Promise<void> {
+    let remaining = parseFloat(amountToConsume.toFixed(2));
+    if (remaining <= 0) return;
+
+    const approvedStakes = await manager.find(Stake, {
+      where: { userId, status: 'APPROVED' },
+      order: { createdAt: 'ASC' },
+    });
+
+    for (const stake of approvedStakes) {
+      if (remaining <= 0) break;
+      const principal = parseFloat(stake.remainingAmount ?? '0');
+      if (principal <= 0) continue;
+
+      const consume = Math.min(principal, remaining);
+      const updatedPrincipal = parseFloat((principal - consume).toFixed(2));
+      remaining = parseFloat((remaining - consume).toFixed(2));
+
+      await manager.update(
+        Stake,
+        { id: stake.id },
+        { remainingAmount: updatedPrincipal.toFixed(2) },
+      );
+    }
+
+    if (remaining > 0) {
+      throw new BadRequestException(
+        'Stake principal mismatch. Please contact support.',
+      );
     }
   }
 }

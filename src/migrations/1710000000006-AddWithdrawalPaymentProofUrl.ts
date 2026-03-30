@@ -5,15 +5,17 @@ export class AddWithdrawalPaymentProofUrl1710000000006 implements MigrationInter
   name = 'AddWithdrawalPaymentProofUrl1710000000006';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const isMysql = queryRunner.connection.options.type === 'mysql';
     await queryRunner.query(`
-      ALTER TABLE "withdrawals"
-      ADD COLUMN IF NOT EXISTS "paymentProofUrl" character varying(512);
+      ALTER TABLE ${isMysql ? '`withdrawals`' : '"withdrawals"'}
+      ADD COLUMN IF NOT EXISTS ${isMysql ? '`paymentProofUrl` VARCHAR(512)' : '"paymentProofUrl" character varying(512)'};
     `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    const isMysql = queryRunner.connection.options.type === 'mysql';
     await queryRunner.query(`
-      ALTER TABLE "withdrawals" DROP COLUMN IF EXISTS "paymentProofUrl";
+      ALTER TABLE ${isMysql ? '`withdrawals`' : '"withdrawals"'} DROP COLUMN IF EXISTS ${isMysql ? '`paymentProofUrl`' : '"paymentProofUrl"'};
     `);
   }
 }

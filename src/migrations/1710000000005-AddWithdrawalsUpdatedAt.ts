@@ -7,15 +7,17 @@ export class AddWithdrawalsUpdatedAt1710000000005 implements MigrationInterface 
   name = 'AddWithdrawalsUpdatedAt1710000000005';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const isMysql = queryRunner.connection.options.type === 'mysql';
     await queryRunner.query(`
-      ALTER TABLE "withdrawals"
-      ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP NOT NULL DEFAULT now();
+      ALTER TABLE ${isMysql ? '`withdrawals`' : '"withdrawals"'}
+      ADD COLUMN IF NOT EXISTS ${isMysql ? '`updatedAt`' : '"updatedAt"'} TIMESTAMP NOT NULL DEFAULT ${isMysql ? 'CURRENT_TIMESTAMP' : 'now()'};
     `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    const isMysql = queryRunner.connection.options.type === 'mysql';
     await queryRunner.query(`
-      ALTER TABLE "withdrawals" DROP COLUMN IF EXISTS "updatedAt";
+      ALTER TABLE ${isMysql ? '`withdrawals`' : '"withdrawals"'} DROP COLUMN IF EXISTS ${isMysql ? '`updatedAt`' : '"updatedAt"'};
     `);
   }
 }

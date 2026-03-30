@@ -201,7 +201,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'List stake requests',
     description:
-      'User requests to move wallet funds into staked balance. Approve moves wallet → staked; user earns daily 2% on staked total.',
+      'User requests to move wallet funds into staked balance. Approve moves wallet → staked; user earns 1.6% ROI once per 24 hours from stake time.',
   })
   @ApiQuery({
     name: 'status',

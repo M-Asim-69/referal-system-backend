@@ -8,24 +8,38 @@ import { appMigrations } from '../migrations';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
+        const dbType = (config.get<string>('database.type') || 'mysql') as
+          | 'mysql'
+          | 'postgres';
         const url = config.get<string>('database.url') || '';
-        const isRemote = !url.includes('localhost');
         const runMigrations =
           config.get<string>('runMigrationsOnStart') !== 'false';
         return {
-          type: 'postgres',
+          type: dbType,
           url,
           autoLoadEntities: true,
           synchronize: false,
           migrations: appMigrations,
           migrationsRun: runMigrations,
           logging: config.get<string>('nodeEnv') === 'development',
-          ssl: isRemote ? { rejectUnauthorized: false } : false,
-          extra: {
-            max: 3,
-            connectionTimeoutMillis: 5000,
-            idleTimeoutMillis: 10000,
-          },
+          ...(dbType === 'postgres'
+            ? {
+                ssl: !url.includes('localhost')
+                  ? { rejectUnauthorized: false }
+                  : false,
+                extra: {
+                  max: 3,
+                  connectionTimeoutMillis: 5000,
+                  idleTimeoutMillis: 10000,
+                },
+              }
+            : {
+                // mysql2 pool options
+                extra: {
+                  connectionLimit: 10,
+                  connectTimeout: 10000,
+                },
+              }),
         };
       },
     }),

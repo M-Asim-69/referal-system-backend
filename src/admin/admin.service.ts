@@ -201,10 +201,9 @@ export class AdminService {
       const amount = parseFloat(initialDeposit.amount);
       if (amount > 0) {
         await this.walletService.approveDeposit(initialDeposit.id);
-        await this.walletService.distributeCommissions(userId, amount);
         return {
           message:
-            'User approved. Initial deposit credited and commissions distributed.',
+            'User approved. Initial deposit credited. Commission will be distributed when user stakes.',
         };
       }
       // Screenshot-only registration: amount 0 until admin sets amount elsewhere

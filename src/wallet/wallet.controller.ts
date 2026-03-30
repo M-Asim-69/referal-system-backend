@@ -154,7 +154,7 @@ export class WalletController {
   @ApiOperation({
     summary: 'Request stake (from wallet / deposited funds)',
     description:
-      'JSON body: amount (min $5). Requires at least one approved deposit and enough wallet balance. Stake is applied instantly: amount moves wallet -> stakedBalance immediately; daily 2% ROI on stakedBalance.',
+      'JSON body: amount (min $5). Requires at least one approved deposit and enough wallet balance. Stake is applied instantly: amount moves wallet -> stakedBalance immediately; 1.6% ROI credited once per 24 hours from the stake time.',
   })
   @ApiResponse({
     status: 201,

@@ -105,8 +105,9 @@ export class AuthService {
 
     let referrer: User | null = null;
     if (dto.referralCode) {
+      const normalizedCode = dto.referralCode.trim().toUpperCase();
       referrer = await this.usersRepo.findOne({
-        where: { referralCode: dto.referralCode },
+        where: { referralCode: normalizedCode },
       });
       if (!referrer) throw new BadRequestException('Invalid referral code');
     }

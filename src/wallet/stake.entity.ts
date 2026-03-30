@@ -26,8 +26,14 @@ export class Stake {
   @Column({ type: 'numeric', precision: 18, scale: 2 })
   amount: string;
 
+  @Column({ type: 'numeric', precision: 18, scale: 2, default: '0' })
+  remainingAmount: string;
+
   @Column({ type: 'varchar', length: 10, default: 'PENDING' })
   status: StakeStatus;
+
+  @Column({ type: 'timestamp', nullable: true })
+  nextRoiAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;
